@@ -1,0 +1,52 @@
+# 📄 import-resources.yml
+# Action: Condicionalmente importa recursos AWS para o Terraform
+# Objetivo: Verifica se recurso já existe e, se sim, importa via Terraform, senão cria novo
+name: Import existing AWS resources
+description: "Importa condicionalmente recursos AWS já existentes para o Terraform state."
+
+inputs:
+  aws_access_key_id:
+    description: AWS Access Key ID
+    required: true
+  aws_secret_access_key:
+    description: AWS Secret Access Key
+    required: true
+  aws_region:
+    description: Região da AWS
+    required: true
+  project_name:
+    description: Nome do projeto
+    required: true
+  environment:
+    description: "Nome do ambiente (ex: dev, prod)"
+    required: true
+  terraform_path:
+    description: Caminho para o diretório com os arquivos Terraform e script import.sh (default terraform)
+    required: false
+    default: terraform
+
+runs:
+  using: composite
+  steps:
+    # -------------------------------
+    # 🔄 IMPORT EXISTING RESOURCES
+    # -------------------------------   
+    # 📤 Verifica a existência e realiza a chamada para o script de imports
+    - name: Importar recursos existentes
+      shell: bash
+      run: |
+        set -e
+      
+        if [ ! -f "${GITHUB_ACTION_PATH}/scripts/import.sh" ]; then
+          echo "❌ Script import.sh não encontrado."
+          exit 1
+        fi
+        bash "${GITHUB_ACTION_PATH}/scripts/import.sh"
+
+        set +e
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        AWS_REGION: ${{ inputs.aws_region }}
+        PROJECT_NAME: ${{ inputs.project_name }}
+        ENVIRONMENT: ${{ inputs.environment }}

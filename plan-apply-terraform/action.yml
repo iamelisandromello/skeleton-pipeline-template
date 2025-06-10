@@ -1,0 +1,86 @@
+# 📄 plan-apply-terraform.yml
+# Action: Executa o ciclo completo de Terraform (init, validate, plan, apply)
+# Objetivo: Aplicar a infraestrutura com base no plano gerado
+
+name: Terraform Plan and Apply
+description: "Executa o Terraform plan e apply com variáveis customizadas e autenticação AWS."
+
+inputs:
+  PROJECT_NAME:
+    description: "Nome do projeto para o TF_VAR"
+    required: true
+  S3_BUCKET_NAME:
+    description: Nome do bucket S3 compartilhado
+    required: true
+  ENVIRONMENT:
+    description: "Ambiente de execução (dev, staging, prod)"
+    required: true
+  AWS_ACCESS_KEY_ID:
+    description: Chave de acesso AWS
+    required: true
+  AWS_SECRET_ACCESS_KEY:
+    description: Chave secreta AWS
+    required: true
+  GLOBAL_ENV_VARS_JSON:
+    description: "JSON com variáveis globais"
+    required: true
+  ENVIRONMENTS_JSON:
+    description: "JSON com dados dos ambientes"
+    required: true
+  terraform_path:
+    description: Caminho para a raiz do Terraform (default ./terraform)
+    required: false
+    default: "terraform"
+
+runs:
+  using: composite
+  steps:
+  # 🧭  Auto formataçao dos arqivo Terraform
+    - name: Auto format Terraform and commit changes
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+      shell: bash
+      run: |
+        cd "${{ inputs.terraform_path }}"
+        echo "🧹 Corrigindo formatação com terraform fmt..."
+        terraform fmt -recursive
+
+        if [[ -n $(git status --porcelain) ]]; then
+          echo "🚨 Alterações de formatação detectadas. Realizando commit..."
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add .
+          git commit -m "chore(terraform): auto fmt"
+          git push
+        else
+          echo "✅ Nenhuma alteração de formatação detectada."
+        fi
+
+    # 🧠 Gera o plano de execução
+    - name: Terraform Plan
+      shell: bash
+      env:
+        TF_VAR_project_name: ${{ inputs.PROJECT_NAME }}
+        TF_VAR_s3_bucket_name: ${{ inputs.S3_BUCKET_NAME }}
+        TF_VAR_global_env_vars: ${{ inputs.GLOBAL_ENV_VARS_JSON }}
+        TF_VAR_environments: ${{ inputs.ENVIRONMENTS_JSON }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.AWS_SECRET_ACCESS_KEY }}
+      run: |
+        cd "${{ inputs.terraform_path }}"
+        echo "📦 Executando Terraform Plan..."
+        terraform plan -input=false -var "environment=${{ inputs.ENVIRONMENT }}"
+
+    # 🚀 Aplica o plano se auto_approve for true
+    - name: Terraform Apply
+      shell: bash
+      env:
+        TF_VAR_project_name: ${{ inputs.PROJECT_NAME }}
+        TF_VAR_s3_bucket_name: ${{ inputs.S3_BUCKET_NAME }}
+        TF_VAR_global_env_vars: ${{ inputs.GLOBAL_ENV_VARS_JSON }}
+        TF_VAR_environments: ${{ inputs.ENVIRONMENTS_JSON }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.AWS_SECRET_ACCESS_KEY }}
+      run: |
+        cd "${{ inputs.terraform_path }}"
+        echo "🚀 Executando Terraform Apply..."
+        terraform apply -auto-approve -var "environment=${{ inputs.ENVIRONMENT }}"

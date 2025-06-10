@@ -1,0 +1,74 @@
+# 📄 upload-to-s3.yml
+# Action: Realiza upload do artefato ZIP
+# Objetivo: Enviar o pacote da Lambda para armazenamento no bucket S3
+name: Upload Lambda ZIP to S3
+description: Extrai o bucket do JSON e faz upload do artefato da Lambda
+
+inputs:
+  global_env_vars_json:
+    description: "JSON com variáveis globais (ex S3_BUCKET_NAME)"
+    required: true
+  aws_access_key_id:
+    required: true
+  aws_secret_access_key:
+    required: true
+  aws_region:
+    description: "Região AWS para o upload"
+    required: false
+    default: "us-east-1"
+  project_name:
+    description: "Nome do projeto para compor o nome do artefato .zip"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # 🏗️ Validações básicas dos inputs
+    - name: Validate inputs
+      shell: bash
+      run: |
+        test -n "${{ inputs.global_env_vars_json }}" || (echo "::error::global_env_vars_json is required" && exit 1)
+        test -n "${{ inputs.project_name }}" || (echo "::error::File '${{ inputs.project_name }}' does not exist" && exit 1)
+
+    # -------------------------------
+    # 🧩 EXTRAI NOME DO BUCKET DO JSON
+    # -------------------------------
+    # 🗂️ Identifica o Bucket S3 repositório do Zip
+    - name: Extrair nome do bucket do JSON
+      shell: bash
+      run: |
+        echo '${{ inputs.global_env_vars_json }}' > global_env_vars.json
+        BUCKET_NAME=$(jq -r '.S3_BUCKET_NAME' global_env_vars.json)
+
+        if [ -z "$BUCKET_NAME" ] || [ "$BUCKET_NAME" = "null" ]; then
+          echo "❌ Falha ao extrair o nome do bucket do JSON:"
+          cat global_env_vars.json
+          exit 1
+        fi
+
+        echo "S3_BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
+        echo "ℹ️ Utilizando bucket: $BUCKET_NAME"
+
+    # -------------------------------
+    # ☁️ UPLOAD ZIP PARA O S3
+    # -------------------------------
+    # ☁️ Realiza o upload do ZIP para o bucket S3
+    - name: Upload Lambda ZIP to S3
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        AWS_REGION: ${{ inputs.aws_region }}
+      run: |
+        set -e
+        if [ ! -f "${{ inputs.project_name }}.zip" ]; then
+          echo "❌ Arquivo ${{ inputs.project_name }}.zip não encontrado."
+          exit 1
+        fi
+
+        echo "🚀 Enviando ${{ inputs.project_name }}.zip para S3..."
+        aws s3 cp "${{ inputs.project_name }}.zip" "s3://$S3_BUCKET_NAME/${{ inputs.project_name }}.zip" \
+        --region $AWS_REGION --acl private
+        
+        set +e
+        echo "✅ Upload concluído: s3://$S3_BUCKET_NAME/${{ inputs.project_name }}.zip"
