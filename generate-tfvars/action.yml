@@ -1,0 +1,71 @@
+# 📄 generate-tvars.yml
+# Action: Gera arquivo terraform.auto.tfvars.json com base em variáveis dinâmicas e segredos
+# Objetivo: Gera arquivo terraform.auto.tfvars.json com base em variáveis dinâmicas e segredos
+name: 'Generate tfvars'
+description: 'Gera arquivo terraform.auto.tfvars.json com base em variáveis dinâmicas e segredos'
+
+inputs:
+  AWS_REGION:
+    required: true
+  PROJECT_NAME:
+    required: true
+  ENVIRONMENT:
+    required: true
+  GLOBAL_ENV_VARS_JSON:
+    required: true
+  ENVIRONMENTS:
+    required: true
+  aws_access_key_id:
+    required: true
+  aws_secret_access_key:
+    required: true
+  s3_bucket_name:
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    # 📊 Verificar o sucesso no recebimento das variáveis 
+    - name: Debug variáveis de entrada
+      shell: bash
+      run: |
+        echo "project_name=${{ inputs.PROJECT_NAME }}"
+        echo "environment=${{ inputs.ENVIRONMENT }}"
+        echo "s3_bucket_name=${{ inputs.s3_bucket_name }}"
+        echo "aws_region=${{ inputs.AWS_REGION }}"
+
+    # 🧾 Gerando arquivo de variáveis terraform
+    - name: Gerar arquivo terraform.auto.tfvars.json
+      shell: bash
+      run: |
+        echo "Gerando terraform.auto.tfvars.json..."
+
+        echo '{' > terraform/terraform.auto.tfvars.json
+        echo '  "aws_region": "${{ inputs.AWS_REGION }}",' >> terraform/terraform.auto.tfvars.json
+        echo '  "project_name": "${{ inputs.PROJECT_NAME }}",' >> terraform/terraform.auto.tfvars.json
+        echo '  "environment": "${{ inputs.ENVIRONMENT }}",' >> terraform/terraform.auto.tfvars.json
+        echo '  "s3_bucket_name": "${{ inputs.s3_bucket_name }}",' >> terraform/terraform.auto.tfvars.json
+        echo '  "global_env_vars": ${{ inputs.GLOBAL_ENV_VARS_JSON }},' >> terraform/terraform.auto.tfvars.json
+        echo '  "environments": ${{ inputs.ENVIRONMENTS }}' >> terraform/terraform.auto.tfvars.json
+        echo '}' >> terraform/terraform.auto.tfvars.json
+
+        echo "Tvars em formato JSON gerado com sucesso!"
+    
+    # 🗂️ Validando acesso ao repositório na AWS
+    - name: Verificar acesso ao bucket S3
+      shell: bash
+      run: aws s3 ls s3://${{ inputs.s3_bucket_name }}
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        AWS_REGION: ${{ inputs.AWS_REGION }}
+
+    # 🛡️ Validando credenciais de acesso a AWS
+    - name: Validar credenciais AWS (STS)
+      shell: bash
+      run: aws sts get-caller-identity
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        AWS_REGION: ${{ inputs.AWS_REGION }}
+
