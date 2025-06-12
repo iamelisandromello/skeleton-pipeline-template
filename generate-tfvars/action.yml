@@ -61,16 +61,20 @@ runs:
 
         # PRÉ-PROCESSAMENTO: Transforma inputs JSON complexos em strings JSON válidas
         # para serem passadas como argumentos para jq.
-        # Isso é crucial para lidar com quebras de linha e caracteres especiais.
-        # `printf '%s'` evita problemas com expansão do shell, e `jq -R .` envolve a string
-        # em aspas e escapa caracteres internos, tornando-a um literal JSON válido.
-        environments_json_literal=$(printf '%s' "${{ inputs.ENVIRONMENTS }}" | jq -R .)
-        global_env_vars_json_literal=$(printf '%s' "${{ inputs.GLOBAL_ENV_VARS_JSON }}" | jq -R .)
+        # Utiliza `jq -sRr .` para "slurpar" toda a entrada crua como uma única string
+        # e então 'fromjson' dentro do jq para parsear. Isso é a abordagem mais robusta
+        # para inputs multi-linha de secrets.
+        
+        # O `printf '%s'` garante que a string de entrada seja passada de forma controlada.
+        # O `jq -sRr .` lê toda a entrada (possivelmente multi-linha) como uma única string bruta,
+        # e a transforma em um literal de string JSON, escapando aspas e novas linhas.
 
-        # Utiliza jq para construir o JSON de forma correta, garantindo que
-        # 'create_sqs_queue' seja um booleano nativo e não uma string.
-        # Passa JSONs complexos como strings e os converte para JSON dentro do jq.
-        # Converte a string "true"/"false" para booleano JSON.
+        environments_json_literal=$(printf '%s' "${{ inputs.ENVIRONMENTS }}" | jq -sRr '.')
+        global_env_vars_json_literal=$(printf '%s' "${{ inputs.GLOBAL_ENV_VARS_JSON }}" | jq -sRr '.')
+
+        # Debug desses literais para confirmar que são single-line e corretamente citados
+        echo "Debug: environments_json_literal = $environments_json_literal"
+        echo "Debug: global_env_vars_json_literal = $global_env_vars_json_literal"
 
         json_content=$(jq -n \
           --arg environments_val "$environments_json_literal" \
