@@ -91,7 +91,7 @@ runs:
 EOF_JQ_SCRIPT
 
         # Executa jq lendo o filtro do arquivo e passando os argumentos.
-        # As variáveis são passadas diretamente como strings e serão lidas pelo jq_filter.jq
+        # AS LINHAS ABAIXO FORAM INDENTADAS PARA EVITAR ERROS DE PARSING DO YAML.
         json_content=$(jq -n \
           --argfile environments_val environments_input_temp.json \
           --argfile global_env_vars_val global_env_vars_input_temp.json \
@@ -102,27 +102,10 @@ EOF_JQ_SCRIPT
           --arg create_sqs_queue_str "${{ inputs.create_sqs_queue }}" \
           -f jq_filter.jq) # Lê o filtro do arquivo temporário
 
-        # Debug da string JSON bruta antes de passar para o jq
-        echo "--- Debug: JSON Bruto Construído ---"
-        echo "$tfvars_raw_json"
-        echo "---"
-
-        # Finalmente, usa jq para formatar (pretty-print) e validar o JSON.
-        # Se houver um erro de sintaxe aqui, jq irá falhar e o erro será claro.
-        final_json=$(echo "$tfvars_raw_json" | jq '.')
-
-        # Verifica se o jq conseguiu processar o JSON (ou seja, se a sintaxe estava correta)
-        if [ $? -ne 0 ]; then
-            echo "❌ Erro: O JSON construído está malformado. Verifique os valores das secrets."
-            echo "Conteúdo JSON malformado:"
-            echo "$tfvars_raw_json"
-            exit 1
-        fi
-
-        echo "$final_json" > terraform/terraform.auto.tfvars.json
+        echo "$json_content" > terraform/terraform.auto.tfvars.json
 
         # Limpa os arquivos temporários
-        rm environments_input_temp.json global_env_vars_input_temp.json
+        rm environments_input_temp.json global_env_vars_input_temp.json jq_filter.jq
 
         # Limpa os arquivos temporários
         rm environments_input_temp.json global_env_vars_input_temp.json jq_filter.jq
