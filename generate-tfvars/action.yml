@@ -21,36 +21,75 @@ inputs:
     required: true
   s3_bucket_name:
     required: true
+  # NOVO INPUT: Para controlar a criação da SQS
+  create_sqs_queue:
+    description: "Define se a fila SQS deve ser criada (true/false)."
+    required: true
+    type: string # Receberá "true" ou "false" como string
+    default: "true" # Mantém o comportamento padrão de criar se não for explicitamente definido
 
 runs:
   using: "composite"
   steps:
     # 📊 Verificar o sucesso no recebimento das variáveis 
-    - name: Debug variáveis de entrada
+    - name: Debug variáveis de entrada na Generate tfvars
       shell: bash
       run: |
         echo "project_name=${{ inputs.PROJECT_NAME }}"
         echo "environment=${{ inputs.ENVIRONMENT }}"
         echo "s3_bucket_name=${{ inputs.s3_bucket_name }}"
         echo "aws_region=${{ inputs.AWS_REGION }}"
+        echo "create_sqs_queue=${{ inputs.create_sqs_queue }}" # NOVO DEBUG: Verifique se o valor está chegando corretamente
 
     # 🧾 Gerando arquivo de variáveis terraform
     - name: Gerar arquivo terraform.auto.tfvars.json
       shell: bash
       run: |
+        set -e
         echo "Gerando terraform.auto.tfvars.json..."
 
-        echo '{' > terraform/terraform.auto.tfvars.json
-        echo '  "aws_region": "${{ inputs.AWS_REGION }}",' >> terraform/terraform.auto.tfvars.json
-        echo '  "project_name": "${{ inputs.PROJECT_NAME }}",' >> terraform/terraform.auto.tfvars.json
-        echo '  "environment": "${{ inputs.ENVIRONMENT }}",' >> terraform/terraform.auto.tfvars.json
-        echo '  "s3_bucket_name": "${{ inputs.s3_bucket_name }}",' >> terraform/terraform.auto.tfvars.json
-        echo '  "global_env_vars": ${{ inputs.GLOBAL_ENV_VARS_JSON }},' >> terraform/terraform.auto.tfvars.json
-        echo '  "environments": ${{ inputs.ENVIRONMENTS }}' >> terraform/terraform.auto.tfvars.json
-        echo '}' >> terraform/terraform.auto.tfvars.json
+        # Instala jq se não estiver presente (geralmente já está em runners ubuntu-latest)
+        if ! command -v jq &> /dev/null
+        then
+            echo "jq não encontrado. Instalando..."
+            sudo apt-get update && sudo apt-get install -y jq
+        fi
 
-        echo "Tvars em formato JSON gerado com sucesso!"
+        # Garante que o diretório 'terraform' exista antes de tentar escrever o arquivo
+        mkdir -p terraform/
+
+        # Utiliza jq para construir o JSON de forma correta, garantindo que
+        # 'create_sqs_queue' seja um booleano nativo e não uma string.
+        json_content=$(jq -n \
+          --argjson environments_var "${{ inputs.ENVIRONMENTS }}" \
+          --argjson global_env_vars_json_var "${{ inputs.GLOBAL_ENV_VARS_JSON }}" \
+          --arg s3_bucket_name_var "${{ inputs.s3_bucket_name }}" \
+          --arg aws_region_var "${{ inputs.AWS_REGION }}" \
+          --arg project_name_var "${{ inputs.PROJECT_NAME }}" \
+          --arg environment_var "${{ inputs.ENVIRONMENT }}" \
+          --argjson create_sqs_queue_var "${{ inputs.create_sqs_queue }}" \
+          '{
+            environments: $environments_var,
+            global_env_vars: $global_env_vars_json_var,
+            s3_bucket_name: $s3_bucket_name_var,
+            aws_region: $aws_region_var,
+            project_name: $project_name_var,
+            environment: $environment_var,
+            create_sqs_queue: $create_sqs_queue_var
+          }')
+
+        echo "$json_content" > terraform/terraform.auto.tfvars.json
+
+        echo "✅ terraform.auto.tfvars.json gerado com sucesso!"
     
+    # 🕵️‍♀️ Debug do arquivo gerado
+    - name: Debug - Conteúdo de terraform.auto.tfvars.json (APÓS GERAÇÃO)
+      shell: bash
+      run: |
+        echo "📄 Conteúdo final de terraform/terraform.auto.tfvars.json:"
+        cat terraform/terraform.auto.tfvars.json || echo "❌ terraform.auto.tfvars.json não encontrado."
+        echo "---"
+
     # 🗂️ Validando acesso ao repositório na AWS
     - name: Verificar acesso ao bucket S3
       shell: bash
@@ -68,4 +107,3 @@ runs:
         AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
         AWS_REGION: ${{ inputs.AWS_REGION }}
-
