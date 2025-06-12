@@ -59,34 +59,27 @@ runs:
         # Garante que o diretório 'terraform' exista antes de tentar escrever o arquivo
         mkdir -p terraform/
 
-        # Escreve os inputs JSON complexos em arquivos temporários.
-        # Isso é crucial para lidar com quebras de linha e caracteres especiais de secrets.
-        echo "${{ inputs.ENVIRONMENTS }}" > environments_input.json
-        echo "${{ inputs.GLOBAL_ENV_VARS_JSON }}" > global_env_vars_input.json
-        
-        # Para garantir que 'create_sqs_queue' seja um booleano JSON literal (true/false sem aspas)
-        # vamos passá-lo como string e convertê-lo em 'jq' usando 'fromjson'
-        # ou, se o valor for *apenas* "true" ou "false", --argjson é mais direto.
-        # Como o erro sugere que os problemas são com os JSONs maiores, vamos manter --argjson para o booleano.
-        # Se ${{ inputs.create_sqs_queue }} não for "true" ou "false" exatos, pode ser a causa.
-        # Mas o log anterior mostrava 'create_sqs_queue=true' (sem aspas no echo), o que é bom.
+        # Utiliza jq para construir o JSON de forma correta, garantindo que
+        # 'create_sqs_queue' seja um booleano nativo e não uma string.
+        # Passa JSONs complexos como strings e os converte para JSON dentro do jq.
+        # Converte a string "true"/"false" para booleano JSON.
 
         json_content=$(jq -n \
-          --argfile environments_val environments_input.json \
-          --argfile global_env_vars_val global_env_vars_input.json \
+          --arg environments_str "${{ inputs.ENVIRONMENTS }}" \
+          --arg global_env_vars_json_str "${{ inputs.GLOBAL_ENV_VARS_JSON }}" \
           --arg s3_bucket_name_val "${{ inputs.s3_bucket_name }}" \
           --arg aws_region_val "${{ inputs.AWS_REGION }}" \
           --arg project_name_val "${{ inputs.PROJECT_NAME }}" \
           --arg environment_val "${{ inputs.ENVIRONMENT }}" \
-          --argjson create_sqs_queue_val "${{ inputs.create_sqs_queue }}" \
+          --arg create_sqs_queue_str "${{ inputs.create_sqs_queue }}" \
           '{
-            environments: $environments_val,
-            global_env_vars: $global_env_vars_val,
+            environments: ($environments_str | fromjson),
+            global_env_vars: ($global_env_vars_json_str | fromjson),
             s3_bucket_name: $s3_bucket_name_val,
             aws_region: $aws_region_val,
             project_name: $project_name_val,
             environment: $environment_val,
-            create_sqs_queue: $create_sqs_queue_val
+            create_sqs_queue: ($create_sqs_queue_str | if . == "true" then true else false end)
           }')
 
         echo "$json_content" > terraform/terraform.auto.tfvars.json
