@@ -66,9 +66,6 @@ runs:
         # Escreve o conteúdo JSON bruto dos inputs para arquivos temporários.
         # Isso é a maneira mais robusta de garantir que jq leia o JSON corretamente,
         # independentemente de como o GitHub Actions expande variáveis multi-linha.
-        
-        # O GitHub Actions já remove as aspas dos secrets JSONs automaticamente quando passados como inputs,
-        # então escrevemos o conteúdo como está.
         echo "${{ inputs.ENVIRONMENTS }}" > environments_input_temp.json
         echo "${{ inputs.GLOBAL_ENV_VARS_JSON }}" > global_env_vars_input_temp.json
         
@@ -79,34 +76,31 @@ runs:
         cat global_env_vars_input_temp.json
         echo "---"
 
-        # Lê o conteúdo dos arquivos temporários para variáveis do shell.
-        # Isso garante que mesmo JSONs multi-linha sejam tratados como uma única string.
-        ENVIRONMENTS_CONTENT=$(cat environments_input_temp.json)
-        GLOBAL_ENV_VARS_CONTENT=$(cat global_env_vars_input_temp.json)
+        # Escreve o script JQ para um arquivo temporário usando um here-doc.
+        # Isso evita problemas de quoting/parsing do YAML para o script jq.
+        cat << 'EOF_JQ_SCRIPT' > jq_filter.jq
+          {
+            environments: ($environments_val | fromjson),
+            global_env_vars: ($global_env_vars_val | fromjson),
+            s3_bucket_name: $s3_bucket_name_val,
+            aws_region: $aws_region_val,
+            project_name: $project_name_val,
+            environment: $environment_val,
+            create_sqs_queue: ($create_sqs_queue_str | if . == "true" then true else false end)
+          }
+EOF_JQ_SCRIPT
 
-        # Determina o valor booleano para create_sqs_queue
-        CREATE_SQS_QUEUE_BOOL=$(if [ "${{ inputs.create_sqs_queue }}" == "true" ]; then echo "true"; else echo "false"; fi)
-
-        # Constrói o JSON final usando printf para evitar problemas de expansão
-        # e garantir que os JSONs complexos sejam inseridos como literais.
-        # O '%s' em printf é seguro para inserir o conteúdo bruto dos JSONs lidos dos arquivos.
-        # O 'create_sqs_queue' é inserido como "true" ou "false" booleano.
-        printf -v tfvars_raw_json '{
-  "aws_region": "%s",
-  "project_name": "%s",
-  "environment": "%s",
-  "s3_bucket_name": "%s",
-  "global_env_vars": %s,
-  "environments": %s,
-  "create_sqs_queue": %s
-}' \
-"${{ inputs.AWS_REGION }}" \
-"${{ inputs.PROJECT_NAME }}" \
-"${{ inputs.ENVIRONMENT }}" \
-"${{ inputs.s3_bucket_name }}" \
-"$GLOBAL_ENV_VARS_CONTENT" \
-"$ENVIRONMENTS_CONTENT" \
-"$CREATE_SQS_QUEUE_BOOL"
+        # Executa jq lendo o filtro do arquivo e passando os argumentos.
+        # As variáveis são passadas diretamente como strings e serão lidas pelo jq_filter.jq
+        json_content=$(jq -n \
+          --argfile environments_val environments_input_temp.json \
+          --argfile global_env_vars_val global_env_vars_input_temp.json \
+          --arg s3_bucket_name_val "${{ inputs.s3_bucket_name }}" \
+          --arg aws_region_val "${{ inputs.AWS_REGION }}" \
+          --arg project_name_val "${{ inputs.PROJECT_NAME }}" \
+          --arg environment_val "${{ inputs.ENVIRONMENT }}" \
+          --arg create_sqs_queue_str "${{ inputs.create_sqs_queue }}" \
+          -f jq_filter.jq) # Lê o filtro do arquivo temporário
 
         # Debug da string JSON bruta antes de passar para o jq
         echo "--- Debug: JSON Bruto Construído ---"
@@ -129,6 +123,9 @@ runs:
 
         # Limpa os arquivos temporários
         rm environments_input_temp.json global_env_vars_input_temp.json
+
+        # Limpa os arquivos temporários
+        rm environments_input_temp.json global_env_vars_input_temp.json jq_filter.jq
 
         echo "✅ terraform.auto.tfvars.json gerado com sucesso!"
     
