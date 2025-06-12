@@ -69,12 +69,12 @@ runs:
         echo "${{ inputs.ENVIRONMENTS }}" > environments_input_temp.json
         echo "${{ inputs.GLOBAL_ENV_VARS_JSON }}" > global_env_vars_input_temp.json
         
-        # Debug dos arquivos temporários para verificar o conteúdo
-        echo "--- Debug environments_input_temp.json ---"
-        cat environments_input_temp.json
-        echo "--- Debug global_env_vars_input_temp.json ---"
-        cat global_env_vars_input_temp.json
-        echo "---"
+        # REMOVIDO: Linhas de debug usando 'cat' para evitar problemas de parsing YAML.
+        # echo "--- Debug environments_input_temp.json ---"
+        # cat environments_input_temp.json
+        # echo "--- Debug global_env_vars_input_temp.json ---"
+        # cat global_env_vars_input_temp.json
+        # echo "---"
 
         # Escreve o script JQ para um arquivo temporário usando um here-doc.
         # Isso evita problemas de quoting/parsing do YAML para o script jq.
@@ -103,9 +103,6 @@ EOF_JQ_SCRIPT
           -f jq_filter.jq) # Lê o filtro do arquivo temporário
 
         echo "$json_content" > terraform/terraform.auto.tfvars.json
-
-        # Limpa os arquivos temporários
-        rm environments_input_temp.json global_env_vars_input_temp.json jq_filter.jq
 
         # Limpa os arquivos temporários
         rm environments_input_temp.json global_env_vars_input_temp.json jq_filter.jq
