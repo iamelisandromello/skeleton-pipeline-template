@@ -25,6 +25,12 @@ inputs:
     required: false
     default: terraform
 
+  # NOVO: Input para controlar a criação e importação da SQS
+  create_sqs_queue:
+    description: "Define se a fila SQS deve ser criada e importada (true/false)."
+    required: false
+    default: "true" # Padrão para true para manter o comportamento atual
+
 runs:
   using: composite
   steps:
@@ -50,3 +56,5 @@ runs:
         AWS_REGION: ${{ inputs.aws_region }}
         PROJECT_NAME: ${{ inputs.project_name }}
         ENVIRONMENT: ${{ inputs.environment }}
+        # NOVO: Passa o input 'create_sqs_queue' como variável de ambiente para o script
+        CREATE_SQS_QUEUE: ${{ inputs.create_sqs_queue }} 
