@@ -46,68 +46,60 @@ runs:
     - name: Gerar arquivo terraform.auto.tfvars.json
       shell: bash
       run: |
-        set -e
-        echo "Gerando terraform.auto.tfvars.json..."
+        sh -c "
+          set -e
+          echo \"Gerando terraform.auto.tfvars.json...\"
 
-        # Instala jq se não estiver presente (geralmente já está em runners ubuntu-latest)
-        if ! command -v jq &> /dev/null
-        then
-            echo "jq não encontrado. Instalando..."
-            sudo apt-get update && sudo apt-get install -y jq
-        fi
+          # Instala jq se não estiver presente (geralmente já está em runners ubuntu-latest)
+          if ! command -v jq &> /dev/null
+          then
+              echo \"jq não encontrado. Instalando...\"
+              sudo apt-get update && sudo apt-get install -y jq
+          fi
 
-        # Debug jq version para fins de diagnóstico futuro
-        echo "jq version: $(jq --version)"
+          # Debug jq version para fins de diagnóstico futuro
+          echo \"jq version: $(jq --version)\"
 
-        # Garante que o diretório 'terraform' exista antes de tentar escrever o arquivo
-        mkdir -p terraform/
+          # Garante que o diretório 'terraform' exista antes de tentar escrever o arquivo
+          mkdir -p terraform/
 
-        # Estratégia de Arquivos Temporários:
-        # Escreve o conteúdo JSON bruto dos inputs para arquivos temporários.
-        # Isso é a maneira mais robusta de garantir que jq leia o JSON corretamente,
-        # independentemente de como o GitHub Actions expande variáveis multi-linha.
-        echo "${{ inputs.ENVIRONMENTS }}" > environments_input_temp.json
-        echo "${{ inputs.GLOBAL_ENV_VARS_JSON }}" > global_env_vars_input_temp.json
-        
-        # REMOVIDO: Linhas de debug usando 'cat' para evitar problemas de parsing YAML.
-        # echo "--- Debug environments_input_temp.json ---"
-        # cat environments_input_temp.json
-        # echo "--- Debug global_env_vars_input_temp.json ---"
-        # cat global_env_vars_input_temp.json
-        # echo "---"
-
-        # Escreve o script JQ para um arquivo temporário usando um here-doc.
-        # Isso evita problemas de quoting/parsing do YAML para o script jq.
-        cat << 'EOF_JQ_SCRIPT' > jq_filter.jq
-          {
+          # Estratégia de Arquivos Temporários:
+          # Escreve o conteúdo JSON bruto dos inputs para arquivos temporários.
+          echo \"${{ inputs.ENVIRONMENTS }}\" > environments_input_temp.json
+          echo \"${{ inputs.GLOBAL_ENV_VARS_JSON }}\" > global_env_vars_input_temp.json
+          
+          # NOVO: Escreve o script JQ diretamente para um arquivo usando 'echo'.
+          # Isso evita a sintaxe do 'cat << EOF' que causa problemas de parsing YAML.
+          # Note a necessidade de escapar as aspas duplas internas que fazem parte do filtro JQ.
+          echo '{
             environments: ($environments_val | fromjson),
             global_env_vars: ($global_env_vars_val | fromjson),
             s3_bucket_name: $s3_bucket_name_val,
             aws_region: $aws_region_val,
             project_name: $project_name_val,
             environment: $environment_val,
-            create_sqs_queue: ($create_sqs_queue_str | if . == "true" then true else false end)
-          }
-EOF_JQ_SCRIPT
+            create_sqs_queue: ($create_sqs_queue_str | if . == \"true\" then true else false end)
+          }' > jq_filter.jq
 
-        # Executa jq lendo o filtro do arquivo e passando os argumentos.
-        # AS LINHAS ABAIXO FORAM INDENTADAS PARA EVITAR ERROS DE PARSING DO YAML.
-        json_content=$(jq -n \
-          --argfile environments_val environments_input_temp.json \
-          --argfile global_env_vars_val global_env_vars_input_temp.json \
-          --arg s3_bucket_name_val "${{ inputs.s3_bucket_name }}" \
-          --arg aws_region_val "${{ inputs.AWS_REGION }}" \
-          --arg project_name_val "${{ inputs.PROJECT_NAME }}" \
-          --arg environment_val "${{ inputs.ENVIRONMENT }}" \
-          --arg create_sqs_queue_str "${{ inputs.create_sqs_queue }}" \
-          -f jq_filter.jq) # Lê o filtro do arquivo temporário
+          # Executa jq lendo o filtro do arquivo e passando os argumentos.
+          # Note a necessidade de escapar as aspas duplas internas que fazem parte dos valores.
+          json_content=$(jq -n \
+            --argfile environments_val environments_input_temp.json \
+            --argfile global_env_vars_val global_env_vars_input_temp.json \
+            --arg s3_bucket_name_val \"${{ inputs.s3_bucket_name }}\" \
+            --arg aws_region_val \"${{ inputs.AWS_REGION }}\" \
+            --arg project_name_val \"${{ inputs.PROJECT_NAME }}\" \
+            --arg environment_val \"${{ inputs.ENVIRONMENT }}\" \
+            --arg create_sqs_queue_str \"${{ inputs.create_sqs_queue }}\" \
+            -f jq_filter.jq)
 
-        echo "$json_content" > terraform/terraform.auto.tfvars.json
+          echo \"$json_content\" > terraform/terraform.auto.tfvars.json
 
-        # Limpa os arquivos temporários
-        rm environments_input_temp.json global_env_vars_input_temp.json jq_filter.jq
+          # Limpa os arquivos temporários
+          rm environments_input_temp.json global_env_vars_input_temp.json jq_filter.jq
 
-        echo "✅ terraform.auto.tfvars.json gerado com sucesso!"
+          echo \"✅ terraform.auto.tfvars.json gerado com sucesso!\"
+        "
     
     # 🕵️‍♀️ Debug do arquivo gerado
     - name: Debug - Conteúdo de terraform.auto.tfvars.json (APÓS GERAÇÃO)
