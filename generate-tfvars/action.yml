@@ -39,7 +39,8 @@ runs:
         echo "environment=${{ inputs.ENVIRONMENT }}"
         echo "s3_bucket_name=${{ inputs.s3_bucket_name }}"
         echo "aws_region=${{ inputs.AWS_REGION }}"
-        echo "create_sqs_queue=${{ inputs.create_sqs_queue }}" # NOVO DEBUG: Verifique se o valor está chegando corretamente
+        echo "create_sqs_queue=${{ inputs.create_sqs_queue }}" 
+        echo "---"
 
     # 🧾 Gerando arquivo de variáveis terraform
     - name: Gerar arquivo terraform.auto.tfvars.json
@@ -58,27 +59,40 @@ runs:
         # Garante que o diretório 'terraform' exista antes de tentar escrever o arquivo
         mkdir -p terraform/
 
-        # Utiliza jq para construir o JSON de forma correta, garantindo que
-        # 'create_sqs_queue' seja um booleano nativo e não uma string.
+        # Escreve os inputs JSON complexos em arquivos temporários.
+        # Isso é crucial para lidar com quebras de linha e caracteres especiais de secrets.
+        echo "${{ inputs.ENVIRONMENTS }}" > environments_input.json
+        echo "${{ inputs.GLOBAL_ENV_VARS_JSON }}" > global_env_vars_input.json
+        
+        # Para garantir que 'create_sqs_queue' seja um booleano JSON literal (true/false sem aspas)
+        # vamos passá-lo como string e convertê-lo em 'jq' usando 'fromjson'
+        # ou, se o valor for *apenas* "true" ou "false", --argjson é mais direto.
+        # Como o erro sugere que os problemas são com os JSONs maiores, vamos manter --argjson para o booleano.
+        # Se ${{ inputs.create_sqs_queue }} não for "true" ou "false" exatos, pode ser a causa.
+        # Mas o log anterior mostrava 'create_sqs_queue=true' (sem aspas no echo), o que é bom.
+
         json_content=$(jq -n \
-          --argjson environments_var "${{ inputs.ENVIRONMENTS }}" \
-          --argjson global_env_vars_json_var "${{ inputs.GLOBAL_ENV_VARS_JSON }}" \
-          --arg s3_bucket_name_var "${{ inputs.s3_bucket_name }}" \
-          --arg aws_region_var "${{ inputs.AWS_REGION }}" \
-          --arg project_name_var "${{ inputs.PROJECT_NAME }}" \
-          --arg environment_var "${{ inputs.ENVIRONMENT }}" \
-          --argjson create_sqs_queue_var "${{ inputs.create_sqs_queue }}" \
+          --argfile environments_val environments_input.json \
+          --argfile global_env_vars_val global_env_vars_input.json \
+          --arg s3_bucket_name_val "${{ inputs.s3_bucket_name }}" \
+          --arg aws_region_val "${{ inputs.AWS_REGION }}" \
+          --arg project_name_val "${{ inputs.PROJECT_NAME }}" \
+          --arg environment_val "${{ inputs.ENVIRONMENT }}" \
+          --argjson create_sqs_queue_val "${{ inputs.create_sqs_queue }}" \
           '{
-            environments: $environments_var,
-            global_env_vars: $global_env_vars_json_var,
-            s3_bucket_name: $s3_bucket_name_var,
-            aws_region: $aws_region_var,
-            project_name: $project_name_var,
-            environment: $environment_var,
-            create_sqs_queue: $create_sqs_queue_var
+            environments: $environments_val,
+            global_env_vars: $global_env_vars_val,
+            s3_bucket_name: $s3_bucket_name_val,
+            aws_region: $aws_region_val,
+            project_name: $project_name_val,
+            environment: $environment_val,
+            create_sqs_queue: $create_sqs_queue_val
           }')
 
         echo "$json_content" > terraform/terraform.auto.tfvars.json
+
+        # Limpa os arquivos temporários
+        rm environments_input.json global_env_vars_input.json
 
         echo "✅ terraform.auto.tfvars.json gerado com sucesso!"
     
