@@ -63,38 +63,35 @@ runs:
           # Garante que o diretório 'terraform' exista antes de tentar escrever o arquivo
           mkdir -p terraform/
 
-          # Estratégia de Arquivos Temporários:
-          # Escreve o conteúdo JSON bruto dos inputs para arquivos temporários.
-          echo \"${{ inputs.ENVIRONMENTS }}\" > environments_input_temp.json
-          echo \"${{ inputs.GLOBAL_ENV_VARS_JSON }}\" > global_env_vars_input_temp.json
-          
-          # ADDED DEBUG: Verifique o conteúdo dos arquivos temporários após a escrita
-          echo \"--- DEBUG: Conteúdo de environments_input_temp.json ---\"
-          cat environments_input_temp.json
-          echo \"--- DEBUG: Conteúdo de global_env_vars_input_temp.json ---\"
-          cat global_env_vars_input_temp.json
-          echo \"---------------------------------------------------\"
+          # Constrói o JSON de entrada para o JQ em uma única string,
+          # escapando as aspas duplas de forma que o shell as passe corretamente para o 'echo'.
+          # O 'create_sqs_queue' é tratado com lógica condicional para ser um booleano nativo.
+          # Os JSONs complexos (ENVIRONMENTS, GLOBAL_ENV_VARS_JSON) são passados como strings e
+          # convertidos em JSON dentro do jq usando 'fromjson'.
 
-          # Constrói o filtro JQ como uma string literal para evitar problemas do parser YAML.
-          JQ_FILTER_CONTENT=\"{\\n  environments: (\$environments_val | fromjson),\\n  global_env_vars: (\$global_env_vars_val | fromjson),\\n  s3_bucket_name: \$s3_bucket_name_val,\\n  aws_region: \$aws_region_val,\\n  project_name: \$project_name_val,\\n  environment: \$environment_val,\\n  create_sqs_queue: (\$create_sqs_queue_str | if . == \\\"true\\\" then true else false end)\\n}\"
-          echo \"$JQ_FILTER_CONTENT\" > jq_filter.jq
+          JQ_INPUT_JSON=\"{\\\"environments_str\\\": \\\"${{ inputs.ENVIRONMENTS }}\\\", \\\"global_env_vars_json_str\\\": \\\"${{ inputs.GLOBAL_ENV_VARS_JSON }}\\\", \\\"s3_bucket_name_val\\\": \\\"${{ inputs.s3_bucket_name }}\\\", \\\"aws_region_val\\\": \\\"${{ inputs.AWS_REGION }}\\\", \\\"project_name_val\\\": \\\"${{ inputs.PROJECT_NAME }}\\\", \\\"environment_val\\\": \\\"${{ inputs.ENVIRONMENT }}\\\", \\\"create_sqs_queue_str\\\": \\\"${{ inputs.create_sqs_queue }}\\\"}\"
 
-          # ADDED DEBUG: Verifique o conteúdo do arquivo jq_filter.jq
-          echo \"--- DEBUG: Conteúdo de jq_filter.jq ---\"
-          cat jq_filter.jq
+          # Debug do JSON de entrada para o jq (antes de passar para o jq)
+          echo \"--- DEBUG: JSON de entrada para jq ---\"
+          echo \"$JQ_INPUT_JSON\"
           echo \"------------------------------------\"
 
-          # Executa jq lendo o filtro do arquivo e passando os argumentos.
-          # Note a necessidade de escapar as aspas duplas internas que fazem parte dos valores.
-          json_content=$(jq -n \
-            --argfile environments_val environments_input_temp.json \
-            --argfile global_env_vars_val global_env_vars_input_temp.json \
-            --arg s3_bucket_name_val \"${{ inputs.s3_bucket_name }}\" \
-            --arg aws_region_val \"${{ inputs.AWS_REGION }}\" \
-            --arg project_name_val \"${{ inputs.PROJECT_NAME }}\" \
-            --arg environment_val \"${{ inputs.ENVIRONMENT }}\" \
-            --arg create_sqs_queue_str \"${{ inputs.create_sqs_queue }}\" \
-            -f jq_filter.jq)
+          # Executa jq lendo a entrada do stdin e processando o JSON.
+          # O filtro jq é passado como string para o comando jq, não de um arquivo.
+          json_content=$(echo \"$JQ_INPUT_JSON\" | jq '. | {
+            environments: (.environments_str | fromjson),
+            global_env_vars: (.global_env_vars_json_str | fromjson),
+            s3_bucket_name: .s3_bucket_name_val,
+            aws_region: .aws_region_val,
+            project_name: .project_name_val,
+            environment: .environment_val,
+            create_sqs_queue: (.create_sqs_queue_str | if . == \"true\" then true else false end)
+          }')
+
+          # Debug: Imprime o resultado do jq antes de escrever no arquivo
+          echo \"--- DEBUG: Conteúdo da variável json_content antes de escrever ---\"
+          echo \"$json_content\"
+          echo \"------------------------------------------\"
 
           # ADDED DEBUG: Imprime o resultado do jq antes de escrever no arquivo
           echo \"--- DEBUG: Conteúdo da variável json_content antes de escrever ---\"
@@ -102,9 +99,6 @@ runs:
           echo \"------------------------------------------\"
 
           echo \"$json_content\" > terraform/terraform.auto.tfvars.json
-
-          # Limpa os arquivos temporários
-          rm environments_input_temp.json global_env_vars_input_temp.json jq_filter.jq
 
           echo \"✅ terraform.auto.tfvars.json gerado com sucesso!\"
         "
