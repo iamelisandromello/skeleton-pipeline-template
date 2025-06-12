@@ -59,22 +59,30 @@ runs:
         # Garante que o diretório 'terraform' exista antes de tentar escrever o arquivo
         mkdir -p terraform/
 
+        # PRÉ-PROCESSAMENTO: Transforma inputs JSON complexos em strings JSON válidas
+        # para serem passadas como argumentos para jq.
+        # Isso é crucial para lidar com quebras de linha e caracteres especiais.
+        # `printf '%s'` evita problemas com expansão do shell, e `jq -R .` envolve a string
+        # em aspas e escapa caracteres internos, tornando-a um literal JSON válido.
+        environments_json_literal=$(printf '%s' "${{ inputs.ENVIRONMENTS }}" | jq -R .)
+        global_env_vars_json_literal=$(printf '%s' "${{ inputs.GLOBAL_ENV_VARS_JSON }}" | jq -R .)
+
         # Utiliza jq para construir o JSON de forma correta, garantindo que
         # 'create_sqs_queue' seja um booleano nativo e não uma string.
         # Passa JSONs complexos como strings e os converte para JSON dentro do jq.
         # Converte a string "true"/"false" para booleano JSON.
 
         json_content=$(jq -n \
-          --arg environments_str "${{ inputs.ENVIRONMENTS }}" \
-          --arg global_env_vars_json_str "${{ inputs.GLOBAL_ENV_VARS_JSON }}" \
+          --arg environments_val "$environments_json_literal" \
+          --arg global_env_vars_val "$global_env_vars_json_literal" \
           --arg s3_bucket_name_val "${{ inputs.s3_bucket_name }}" \
           --arg aws_region_val "${{ inputs.AWS_REGION }}" \
           --arg project_name_val "${{ inputs.PROJECT_NAME }}" \
           --arg environment_val "${{ inputs.ENVIRONMENT }}" \
           --arg create_sqs_queue_str "${{ inputs.create_sqs_queue }}" \
           '{
-            environments: ($environments_str | fromjson),
-            global_env_vars: ($global_env_vars_json_str | fromjson),
+            environments: ($environments_val | fromjson),
+            global_env_vars: ($global_env_vars_val | fromjson),
             s3_bucket_name: $s3_bucket_name_val,
             aws_region: $aws_region_val,
             project_name: $project_name_val,
@@ -83,9 +91,6 @@ runs:
           }')
 
         echo "$json_content" > terraform/terraform.auto.tfvars.json
-
-        # Limpa os arquivos temporários
-        rm environments_input.json global_env_vars_input.json
 
         echo "✅ terraform.auto.tfvars.json gerado com sucesso!"
     
