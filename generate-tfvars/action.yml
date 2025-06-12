@@ -68,18 +68,10 @@ runs:
           echo \"${{ inputs.ENVIRONMENTS }}\" > environments_input_temp.json
           echo \"${{ inputs.GLOBAL_ENV_VARS_JSON }}\" > global_env_vars_input_temp.json
           
-          # NOVO: Escreve o script JQ diretamente para um arquivo usando 'echo'.
-          # Isso evita a sintaxe do 'cat << EOF' que causa problemas de parsing YAML.
-          # Note a necessidade de escapar as aspas duplas internas que fazem parte do filtro JQ.
-          echo '{
-            environments: ($environments_val | fromjson),
-            global_env_vars: ($global_env_vars_val | fromjson),
-            s3_bucket_name: $s3_bucket_name_val,
-            aws_region: $aws_region_val,
-            project_name: $project_name_val,
-            environment: $environment_val,
-            create_sqs_queue: ($create_sqs_queue_str | if . == \"true\" then true else false end)
-          }' > jq_filter.jq
+          # NOVO: Constrói o filtro JQ como uma string literal para evitar problemas do parser YAML.
+          # Todas as quebras de linha e aspas duplas internas são escapadas.
+          JQ_FILTER_CONTENT=\"{\\n  environments: (\$environments_val | fromjson),\\n  global_env_vars: (\$global_env_vars_val | fromjson),\\n  s3_bucket_name: \$s3_bucket_name_val,\\n  aws_region: \$aws_region_val,\\n  project_name: \$project_name_val,\\n  environment: \$environment_val,\\n  create_sqs_queue: (\$create_sqs_queue_str | if . == \\\"true\\\" then true else false end)\\n}\"
+          echo \"$JQ_FILTER_CONTENT\" > jq_filter.jq
 
           # Executa jq lendo o filtro do arquivo e passando os argumentos.
           # Note a necessidade de escapar as aspas duplas internas que fazem parte dos valores.
