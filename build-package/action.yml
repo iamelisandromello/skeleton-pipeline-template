@@ -16,6 +16,16 @@ inputs:
 runs:
   using: composite
   steps:
+    # ADDED DEBUG: Verifique o diretório de trabalho e seus conteúdos ANTES da validação.
+    - name: Debug - Pre-validation directory check
+      shell: bash
+      run: |
+        echo "--- DEBUG: Current directory (pwd) before validation ---"
+        pwd
+        echo "--- DEBUG: List contents of current directory (ls -la) before validation ---"
+        ls -la
+        echo "---------------------------------------------------------"
+
     # ✅ Valida se o diretório fonte existe
     - name: Validate input path
       shell: bash
@@ -31,6 +41,11 @@ runs:
       run: |
         set -e  
         cd "${{ inputs.lambda_source_path }}"
+        echo "--- DEBUG: Current directory (pwd) inside Install dependencies step ---"
+        pwd
+        echo "--- DEBUG: List contents of current directory (ls -la) inside Install dependencies step ---"
+        ls -la
+        echo "---------------------------------------------------------"
         npm install
 
     # 🏗️ Realiza build do projeto
@@ -38,6 +53,11 @@ runs:
       shell: bash
       run: |
         cd "${{ inputs.lambda_source_path }}"
+        echo "--- DEBUG: Current directory (pwd) inside Build TypeScript step ---"
+        pwd
+        echo "--- DEBUG: List contents of current directory (ls -la) inside Build TypeScript step ---"
+        ls -la
+        echo "---------------------------------------------------------"
         npm run build
         set +e
 
@@ -51,6 +71,11 @@ runs:
         set -e
 
         cd "${{ inputs.lambda_source_path }}"
+        echo "--- DEBUG: Current directory (pwd) inside Create Lambda ZIP step ---"
+        pwd
+        echo "--- DEBUG: List contents of current directory (ls -la) inside Create Lambda ZIP step ---"
+        ls -la
+        echo "---------------------------------------------------------"
 
         if [ ! -d "dist" ]; then
           echo "❌ Diretório 'dist' não encontrado. Verifique se o build foi bem-sucedido."
