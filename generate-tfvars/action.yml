@@ -56,45 +56,79 @@ runs:
             sudo apt-get update && sudo apt-get install -y jq
         fi
 
+        # Debug jq version para fins de diagnóstico futuro
+        echo "jq version: $(jq --version)"
+
         # Garante que o diretório 'terraform' exista antes de tentar escrever o arquivo
         mkdir -p terraform/
 
-        # PRÉ-PROCESSAMENTO: Transforma inputs JSON complexos em strings JSON válidas
-        # para serem passadas como argumentos para jq.
-        # Utiliza `jq -sRr .` para "slurpar" toda a entrada crua como uma única string
-        # e então 'fromjson' dentro do jq para parsear. Isso é a abordagem mais robusta
-        # para inputs multi-linha de secrets.
+        # Estratégia de Arquivos Temporários:
+        # Escreve o conteúdo JSON bruto dos inputs para arquivos temporários.
+        # Isso é a maneira mais robusta de garantir que jq leia o JSON corretamente,
+        # independentemente de como o GitHub Actions expande variáveis multi-linha.
         
-        # O `printf '%s'` garante que a string de entrada seja passada de forma controlada.
-        # O `jq -sRr .` lê toda a entrada (possivelmente multi-linha) como uma única string bruta,
-        # e a transforma em um literal de string JSON, escapando aspas e novas linhas.
+        # O GitHub Actions já remove as aspas dos secrets JSONs automaticamente quando passados como inputs,
+        # então escrevemos o conteúdo como está.
+        echo "${{ inputs.ENVIRONMENTS }}" > environments_input_temp.json
+        echo "${{ inputs.GLOBAL_ENV_VARS_JSON }}" > global_env_vars_input_temp.json
+        
+        # Debug dos arquivos temporários para verificar o conteúdo
+        echo "--- Debug environments_input_temp.json ---"
+        cat environments_input_temp.json
+        echo "--- Debug global_env_vars_input_temp.json ---"
+        cat global_env_vars_input_temp.json
+        echo "---"
 
-        environments_json_literal=$(printf '%s' "${{ inputs.ENVIRONMENTS }}" | jq -sRr '.')
-        global_env_vars_json_literal=$(printf '%s' "${{ inputs.GLOBAL_ENV_VARS_JSON }}" | jq -sRr '.')
+        # Lê o conteúdo dos arquivos temporários para variáveis do shell.
+        # Isso garante que mesmo JSONs multi-linha sejam tratados como uma única string.
+        ENVIRONMENTS_CONTENT=$(cat environments_input_temp.json)
+        GLOBAL_ENV_VARS_CONTENT=$(cat global_env_vars_input_temp.json)
 
-        # Debug desses literais para confirmar que são single-line e corretamente citados
-        echo "Debug: environments_json_literal = $environments_json_literal"
-        echo "Debug: global_env_vars_json_literal = $global_env_vars_json_literal"
+        # Determina o valor booleano para create_sqs_queue
+        CREATE_SQS_QUEUE_BOOL=$(if [ "${{ inputs.create_sqs_queue }}" == "true" ]; then echo "true"; else echo "false"; fi)
 
-        json_content=$(jq -n \
-          --arg environments_val "$environments_json_literal" \
-          --arg global_env_vars_val "$global_env_vars_json_literal" \
-          --arg s3_bucket_name_val "${{ inputs.s3_bucket_name }}" \
-          --arg aws_region_val "${{ inputs.AWS_REGION }}" \
-          --arg project_name_val "${{ inputs.PROJECT_NAME }}" \
-          --arg environment_val "${{ inputs.ENVIRONMENT }}" \
-          --arg create_sqs_queue_str "${{ inputs.create_sqs_queue }}" \
-          '{
-            environments: ($environments_val | fromjson),
-            global_env_vars: ($global_env_vars_val | fromjson),
-            s3_bucket_name: $s3_bucket_name_val,
-            aws_region: $aws_region_val,
-            project_name: $project_name_val,
-            environment: $environment_val,
-            create_sqs_queue: ($create_sqs_queue_str | if . == "true" then true else false end)
-          }')
+        # Constrói o JSON final usando printf para evitar problemas de expansão
+        # e garantir que os JSONs complexos sejam inseridos como literais.
+        # O '%s' em printf é seguro para inserir o conteúdo bruto dos JSONs lidos dos arquivos.
+        # O 'create_sqs_queue' é inserido como "true" ou "false" booleano.
+        printf -v tfvars_raw_json '{
+  "aws_region": "%s",
+  "project_name": "%s",
+  "environment": "%s",
+  "s3_bucket_name": "%s",
+  "global_env_vars": %s,
+  "environments": %s,
+  "create_sqs_queue": %s
+}' \
+"${{ inputs.AWS_REGION }}" \
+"${{ inputs.PROJECT_NAME }}" \
+"${{ inputs.ENVIRONMENT }}" \
+"${{ inputs.s3_bucket_name }}" \
+"$GLOBAL_ENV_VARS_CONTENT" \
+"$ENVIRONMENTS_CONTENT" \
+"$CREATE_SQS_QUEUE_BOOL"
 
-        echo "$json_content" > terraform/terraform.auto.tfvars.json
+        # Debug da string JSON bruta antes de passar para o jq
+        echo "--- Debug: JSON Bruto Construído ---"
+        echo "$tfvars_raw_json"
+        echo "---"
+
+        # Finalmente, usa jq para formatar (pretty-print) e validar o JSON.
+        # Se houver um erro de sintaxe aqui, jq irá falhar e o erro será claro.
+        final_json=$(echo "$tfvars_raw_json" | jq '.')
+
+        # Verifica se o jq conseguiu processar o JSON (ou seja, se a sintaxe estava correta)
+        if [ $? -ne 0 ]; then
+            echo "❌ Erro: O JSON construído está malformado. Verifique os valores das secrets."
+            echo "Conteúdo JSON malformado:"
+            echo "$tfvars_raw_json"
+            exit 1
+        fi
+
+        echo "$final_json" > terraform/terraform.auto.tfvars.json
+
+        # Limpa os arquivos temporários
+        rm environments_input_temp.json global_env_vars_input_temp.json
 
         echo "✅ terraform.auto.tfvars.json gerado com sucesso!"
     
