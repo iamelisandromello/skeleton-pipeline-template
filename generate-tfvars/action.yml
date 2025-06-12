@@ -45,64 +45,69 @@ runs:
     # 🧾 Gerando arquivo de variáveis terraform
     - name: Gerar arquivo terraform.auto.tfvars.json
       shell: bash
+      # O script shell agora é auto-contido, com os inputs diretamente mapeados para variáveis de ambiente.
+      # O 'jq' lerá diretamente dessas variáveis de ambiente, evitando problemas de escaping complexos do shell.
       run: |
-        sh -c "
-          set -e
-          echo \"Gerando terraform.auto.tfvars.json...\"
+        set -e
+        echo "Gerando terraform.auto.tfvars.json..."
 
-          # Instala jq se não estiver presente (geralmente já está em runners ubuntu-latest)
-          if ! command -v jq &> /dev/null
-          then
-              echo \"jq não encontrado. Instalando...\"
-              sudo apt-get update && sudo apt-get install -y jq
-          fi
+        # Instala jq se não estiver presente (geralmente já está em runners ubuntu-latest)
+        if ! command -v jq &> /dev/null
+        then
+            echo "jq não encontrado. Instalando..."
+            sudo apt-get update && sudo apt-get install -y jq
+        fi
 
-          # Debug jq version para fins de diagnóstico futuro
-          echo \"jq version: $(jq --version)\"
+        # Debug jq version para fins de diagnóstico futuro
+        echo "jq version: $(jq --version)"
 
-          # Garante que o diretório 'terraform' exista antes de tentar escrever o arquivo
-          mkdir -p terraform/
+        # Garante que o diretório 'terraform' exista antes de tentar escrever o arquivo
+        mkdir -p terraform/
 
-          # Constrói o JSON de entrada para o JQ em uma única string,
-          # escapando as aspas duplas de forma que o shell as passe corretamente para o 'echo'.
-          # O 'create_sqs_queue' é tratado com lógica condicional para ser um booleano nativo.
-          # Os JSONs complexos (ENVIRONMENTS, GLOBAL_ENV_VARS_JSON) são passados como strings e
-          # convertidos em JSON dentro do jq usando 'fromjson'.
+        # Define o filtro JQ como uma string multi-linha.
+        # JQ acessa as variáveis de ambiente usando $ENV.<VARNAME>
+        # 'fromjson' é crucial aqui, pois os valores dos secrets (ENVIRONMENTS_JSON, GLOBAL_ENV_VARS_JSON)
+        # são passados como strings brutas para as variáveis de ambiente.
+        # A conversão de "true"/"false" para booleano é feita diretamente no filtro.
+        JQ_FILTER='
+          {
+            environments: ($ENV.ENVIRONMENTS_JSON | fromjson),
+            global_env_vars: ($ENV.GLOBAL_ENV_VARS_JSON | fromjson),
+            s3_bucket_name: $ENV.S3_BUCKET_NAME,
+            aws_region: $ENV.AWS_REGION,
+            project_name: $ENV.PROJECT_NAME,
+            environment: $ENV.ENVIRONMENT,
+            create_sqs_queue: ($ENV.CREATE_SQS_QUEUE | if . == "true" then true else false end)
+          }
+        '
+        
+        # Executa o jq. A entrada vazia `echo ""` é para fornecer um stdin vazio
+        # já que o jq usará as variáveis de ambiente.
+        json_content=$(echo "" | jq -n "$JQ_FILTER")
 
-          JQ_INPUT_JSON=\"{\\\"environments_str\\\": \\\"${{ inputs.ENVIRONMENTS }}\\\", \\\"global_env_vars_json_str\\\": \\\"${{ inputs.GLOBAL_ENV_VARS_JSON }}\\\", \\\"s3_bucket_name_val\\\": \\\"${{ inputs.s3_bucket_name }}\\\", \\\"aws_region_val\\\": \\\"${{ inputs.AWS_REGION }}\\\", \\\"project_name_val\\\": \\\"${{ inputs.PROJECT_NAME }}\\\", \\\"environment_val\\\": \\\"${{ inputs.ENVIRONMENT }}\\\", \\\"create_sqs_queue_str\\\": \\\"${{ inputs.create_sqs_queue }}\\\"}\"
+        # Debug: Imprime o resultado do jq antes de escrever no arquivo
+        echo "--- DEBUG: Conteúdo da variável json_content antes de escrever ---"
+        echo "$json_content"
+        echo "------------------------------------------"
 
-          # Debug do JSON de entrada para o jq (antes de passar para o jq)
-          echo \"--- DEBUG: JSON de entrada para jq ---\"
-          echo \"$JQ_INPUT_JSON\"
-          echo \"------------------------------------\"
+        echo "$json_content" > terraform/terraform.auto.tfvars.json
 
-          # Executa jq lendo a entrada do stdin e processando o JSON.
-          # O filtro jq é passado como string para o comando jq, não de um arquivo.
-          json_content=$(echo \"$JQ_INPUT_JSON\" | jq '. | {
-            environments: (.environments_str | fromjson),
-            global_env_vars: (.global_env_vars_json_str | fromjson),
-            s3_bucket_name: .s3_bucket_name_val,
-            aws_region: .aws_region_val,
-            project_name: .project_name_val,
-            environment: .environment_val,
-            create_sqs_queue: (.create_sqs_queue_str | if . == \"true\" then true else false end)
-          }')
+        echo "✅ terraform.auto.tfvars.json gerado com sucesso!"
+      # Passa todos os inputs da Action como variáveis de ambiente para o contexto shell deste passo 'run'.
+      # É assim que o 'jq' os acessará usando a sintaxe '$ENV.<VARNAME>'.
+      env: 
+        AWS_REGION: ${{ inputs.AWS_REGION }}
+        PROJECT_NAME: ${{ inputs.PROJECT_NAME }}
+        ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+        # NOTA: O nome da variável de ambiente aqui deve ser exatamente como referenciado no filtro JQ ($ENV.NOME_DA_VARIAVEL).
+        ENVIRONMENTS_JSON: ${{ inputs.ENVIRONMENTS }} 
+        GLOBAL_ENV_VARS_JSON: ${{ inputs.GLOBAL_ENV_VARS_JSON }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        S3_BUCKET_NAME: ${{ inputs.s3_bucket_name }}
+        # CREATE_SQS_QUEUE é passado como a string "true" ou "false"
+        CREATE_SQS_QUEUE: ${{ inputs.create_sqs_queue }} 
 
-          # Debug: Imprime o resultado do jq antes de escrever no arquivo
-          echo \"--- DEBUG: Conteúdo da variável json_content antes de escrever ---\"
-          echo \"$json_content\"
-          echo \"------------------------------------------\"
-
-          # ADDED DEBUG: Imprime o resultado do jq antes de escrever no arquivo
-          echo \"--- DEBUG: Conteúdo da variável json_content antes de escrever ---\"
-          echo \"$json_content\"
-          echo \"------------------------------------------\"
-
-          echo \"$json_content\" > terraform/terraform.auto.tfvars.json
-
-          echo \"✅ terraform.auto.tfvars.json gerado com sucesso!\"
-        "
-    
     # 🕵️‍♀️ Debug do arquivo gerado
     - name: Debug - Conteúdo de terraform.auto.tfvars.json (APÓS GERAÇÃO)
       shell: bash
