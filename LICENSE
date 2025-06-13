@@ -1,21 +1,49 @@
-MIT License
+Copyright (c) 2025 I am Elisandro Mello and Breathing Code Tecnologia
+CONTRATO DE LICENÇA DE USO DE SOFTWARE SKELETON MICROFRAMEWORK E MODULOS
 
-Copyright (c) 2025 I am Elisandro Mello
+Este Contrato de Licença de Uso de Software (doravante, "Contrato") é um acordo legal entre a Empresa Licenciada e BREATHING CODE TECNOLOGIA (doravante, "Licenciante") para o uso do software SKELETON MICROFRAMEWORK E SEUS MÓDULOS, incluindo quaisquer atualizações, documentação e componentes relacionados (doravante, o "Software").
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+AO INSTALAR, USAR OU ACESSAR O SOFTWARE, A EMPRESA LICENCIADA CONCORDA EM FICAR VINCULADA AOS TERMOS DESTE CONTRATO. SE A EMPRESA LICENCIADA NÃO CONCORDAR COM OS TERMOS DESTE CONTRATO, NÃO INSTALE, USE OU ACESSE O SOFTWARE.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. CONCESSÃO DA LICENÇA
+1.1. Sujeito aos termos e condições deste Contrato, o Licenciante concede à Empresa Licenciada uma licença não exclusiva, intransferível e limitada para instalar e usar o Software apenas para suas operações internas de negócios, conforme o plano de assinatura/licenciamento adquirido pela Empresa Licenciada e detalhado no Apêndice A (ou documento de proposta/pedido).
+1.2. Esta licença é concedida unicamente para a finalidade de desenvolvimento de software e integração em sistemas internos da Empresa Licenciada, e não para revenda, sublicenciamento ou fornecimento do Software como um serviço a terceiros.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. RESTRIÇÕES DE USO
+2.1. A Empresa Licenciada não poderá, e não permitirá que terceiros:
+a) Copiar, modificar, adaptar, traduzir, ou criar trabalhos derivados do Software;
+b) Realizar engenharia reversa, descompilar, desmontar ou de outra forma tentar descobrir o código-fonte do Software, exceto na medida em que tais atividades sejam expressamente permitidas pela lei aplicável e, mesmo assim, apenas após notificação prévia ao Licenciante;
+c) Distribuir, licenciar, sublicenciar, vender, alugar, arrendar, emprestar, transferir ou de outra forma disponibilizar o Software a terceiros;
+d) Usar o Software para desenvolver qualquer produto ou serviço que seja direta ou indiretamente competitivo com os produtos ou serviços do Licenciante;
+e) Remover, alterar ou ocultar quaisquer avisos de direitos autorais, marcas registradas ou outros avisos de propriedade contidos no Software.
+2.2. O uso do Software é limitado ao número de instâncias/usuários/projetos conforme especificado no plano de assinatura/licenciamento adquirido pela Empresa Licenciada. Qualquer uso excedente requer a aquisição de licenças adicionais.
+
+3. PROPRIEDADE INTELECTUAL
+3.1. O Software e toda a propriedade intelectual nele contida, incluindo, mas não se limitando a, direitos autorais, patentes, segredos comerciais e marcas registradas, são de propriedade exclusiva do Licenciante. Este Contrato não transfere à Empresa Licenciada qualquer direito de propriedade sobre o Software, mas apenas uma licença limitada de uso.
+3.2. A Empresa Licenciada reconhece que o Software é um segredo comercial valioso do Licenciante.
+
+4. TERMOS DE PAGAMENTO
+4.1. A Empresa Licenciada concorda em pagar ao Licenciante as taxas de licenciamento/assinatura conforme estabelecido no documento de proposta/pedido, nas condições e prazos ali especificados.
+4.2. A falta de pagamento das taxas devidas poderá resultar na suspensão ou rescisão imediata da licença.
+
+5. PERÍODO DA LICENÇA E RESCISÃO
+5.1. Este Contrato entra em vigor na data em que a Empresa Licenciada aceita seus termos e permanecerá em vigor pelo período especificado no plano de assinatura/licenciamento, a menos que seja rescindido anteriormente de acordo com os termos aqui dispostos.
+5.2. Este Contrato pode ser rescindido pelo Licenciante imediatamente e sem aviso prévio caso a Empresa Licenciada viole qualquer termo material deste Contrato.
+5.3. Em caso de rescisão, a Empresa Licenciada deverá cessar imediatamente todo o uso do Software e destruir todas as cópias do Software em sua posse ou controle.
+
+6. GARANTIAS E ISENÇÕES DE RESPONSABILIDADE
+6.1. O Licenciante garante que o Software funcionará substancialmente de acordo com a documentação fornecida por um período de [Número] dias a partir da data de início da licença.
+6.2. EXCETO CONFORME EXPRESSAMENTE ESTABELECIDO NA CLÁUSULA 6.1, O SOFTWARE É FORNECIDO "COMO ESTÁ", SEM GARANTIAS DE QUALQUER TIPO, EXPRESSAS OU IMPLÍCITAS, INCLUINDO, MAS NÃO SE LIMITANDO A, GARANTIAS DE COMERCIALIZAÇÃO, ADEQUAÇÃO A UMA FINALIDADE ESPECÍFICA E NÃO INFRAÇÃO.
+6.3. O Licenciante não garante que o Software será ininterrupto ou livre de erros, ou que todos os defeitos serão corrigidos.
+
+7. LIMITAÇÃO DE RESPONSABILIDADE
+7.1. EM NENHUM CASO O LICENCIANTE SERÁ RESPONSÁVEL POR QUAISQUER DANOS INDIRETOS, INCIDENTAIS, ESPECIAIS, PUNITIVOS OU CONSEQUENCIAIS (INCLUINDO, MAS NÃO SE LIMITANDO A, PERDA DE LUCROS, PERDA DE DADOS OU INTERRUPÇÃO DE NEGÓCIOS) DECORRENTES DO USO OU DA INCAPACIDADE DE USAR O SOFTWARE, MESMO QUE O LICENCIANTE TENHA SIDO AVISADO DA POSSIBILIDADE DE TAIS DANOS.
+7.2. A RESPONSABILIDADE TOTAL DO LICENCIANTE SOB ESTE CONTRATO NÃO EXCEDERÁ O MONTANTE PAGO PELA EMPRESA LICENCIADA AO LICENCIANTE NOS DOZE (12) MESES ANTERIORES À RECLAMAÇÃO.
+
+8. LEI APLICÁVEL E FORO
+8.1. Este Contrato será regido e interpretado de acordo com as leis da República Federativa do Brasil, Estado de São Paulo, sem considerar seus princípios de conflito de leis.
+8.2. Qualquer disputa decorrente ou relacionada a este Contrato será submetida à jurisdição exclusiva dos tribunais de São Paulo, SP.
+
+9. DISPOSIÇÕES GERAIS
+9.1. Este Contrato constitui o acordo integral entre as partes em relação ao objeto aqui tratado e substitui todos os acordos e entendimentos anteriores, sejam orais ou escritos.
+9.2. Nenhuma alteração ou modificação deste Contrato será válida, a menos que seja feita por escrito e assinada por ambas as partes.
