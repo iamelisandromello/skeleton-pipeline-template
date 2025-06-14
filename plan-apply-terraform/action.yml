@@ -47,7 +47,7 @@ inputs:
 
   # MODIFICADO: Input agora é o NOME da fila SQS existente, não o ARN
   existing_sqs_queue_name:
-    description = "O NOME da fila SQS existente a ser usada como trigger."
+    description: "O NOME da fila SQS existente a ser usada como trigger." # CORRIGIDO: de '=' para ':'
     required: false
     type: string
     default: ""
@@ -85,7 +85,7 @@ runs:
         TF_VAR_environments: ${{ inputs.ENVIRONMENTS_JSON }}
         TF_VAR_create_sqs_queue: ${{ inputs.create_sqs_queue }}
         TF_VAR_use_existing_sqs_trigger: ${{ inputs.use_existing_sqs_trigger }}
-        TF_VAR_existing_sqs_queue_name: ${{ inputs.existing_sqs_queue_name }} # MODIFICADO
+        TF_VAR_existing_sqs_queue_name: ${{ inputs.existing_sqs_queue_name }}
         AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
       run: |
@@ -103,8 +103,8 @@ runs:
         TF_VAR_environments: ${{ inputs.ENVIRONMENTS_JSON }}
         TF_VAR_create_sqs_queue: ${{ inputs.create_sqs_queue }}
         TF_VAR_use_existing_sqs_trigger: ${{ inputs.use_existing_sqs_trigger }}
-        TF_VAR_existing_sqs_queue_name: ${{ inputs.existing_sqs_queue_name }} # MODIFICADO
-        AWS_ACCESS_KEY_ID: ${{ inputs.AWS_ACCESS_KEY_ID }}
+        TF_VAR_existing_sqs_queue_name: ${{ inputs.existing_sqs_queue_name }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.AWS_SECRET_ACCESS_KEY }}
       run: |
         cd "${{ inputs.terraform_path }}"
