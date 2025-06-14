@@ -28,16 +28,16 @@ inputs:
     type: string
     default: "true"
 
-  # NOVO INPUT: Para controlar se usaremos uma fila SQS EXISTENTE como trigger
+  # MODIFICADO: Input agora é o NOME da fila SQS existente
   use_existing_sqs_trigger:
     description: "Define se uma fila SQS existente será usada como trigger para a Lambda."
     required: true
-    type: string # Receberá "true" ou "false" como string
+    type: string
     default: "false"
 
-  # NOVO INPUT: ARN da fila SQS EXISTENTE
-  existing_sqs_queue_arn:
-    description: "O ARN da fila SQS existente a ser usada como trigger (requer use_existing_sqs_trigger=true)."
+  # MODIFICADO: Input agora é o NOME da fila SQS existente, não o ARN
+  existing_sqs_queue_name:
+    description: "O NOME da fila SQS existente a ser usada como trigger (requer use_existing_sqs_trigger=true)."
     required: false # Requerido apenas se use_existing_sqs_trigger for true
     type: string
     default: "" # Valor padrão vazio
@@ -55,7 +55,7 @@ runs:
         echo "aws_region=${{ inputs.AWS_REGION }}"
         echo "create_sqs_queue=${{ inputs.create_sqs_queue }}" 
         echo "use_existing_sqs_trigger=${{ inputs.use_existing_sqs_trigger }}"
-        echo "existing_sqs_queue_arn=${{ inputs.existing_sqs_queue_arn }}"
+        echo "existing_sqs_queue_name=${{ inputs.existing_sqs_queue_name }}" # MODIFICADO
         echo "---"
 
     # 🧾 Gerando arquivo de variáveis terraform
@@ -75,31 +75,37 @@ runs:
 
         mkdir -p terraform/
 
-        JQ_FILTER='
-          {
-            environments: ($ENV.ENVIRONMENTS_JSON | fromjson),
-            global_env_vars: ($ENV.GLOBAL_ENV_VARS_JSON | fromjson),
-            s3_bucket_name: $ENV.S3_BUCKET_NAME,
-            aws_region: $ENV.AWS_REGION,
-            project_name: $ENV.PROJECT_NAME,
-            environment: $ENV.ENVIRONMENT,
-            create_sqs_queue: ($ENV.CREATE_SQS_QUEUE | if . == "true" then true else false end),
-            # NOVO: Adicionando as variáveis de trigger de SQS existente
-            use_existing_sqs_trigger: ($ENV.USE_EXISTING_SQS_TRIGGER | if . == "true" then true else false end),
-            existing_sqs_queue_arn: $ENV.EXISTING_SQS_QUEUE_ARN
-          }
-        '
-        
-        json_content=$(echo "" | jq -n "$JQ_FILTER")
+        # PREPARAR ENVS PARA JQ
+        environments_json_literal=$(printf '%s' "${{ inputs.ENVIRONMENTS }}" | jq -sRr '.')
+        global_env_vars_json_literal=$(printf '%s' "${{ inputs.GLOBAL_ENV_VARS_JSON }}" | jq -sRr '.')
 
-        echo "--- DEBUG: Conteúdo da variável json_content antes de escrever ---"
-        echo "$json_content"
-        echo "------------------------------------------"
+        json_content=$(jq -n \
+          --arg environments_str "$environments_json_literal" \
+          --arg global_env_vars_json_str "$global_env_vars_json_literal" \
+          --arg s3_bucket_name_val "${{ inputs.s3_bucket_name }}" \
+          --arg aws_region_val "${{ inputs.AWS_REGION }}" \
+          --arg project_name_val "${{ inputs.PROJECT_NAME }}" \
+          --arg environment_val "${{ inputs.ENVIRONMENT }}" \
+          --arg create_sqs_queue_str "${{ inputs.create_sqs_queue }}" \
+          --arg use_existing_sqs_trigger_str "${{ inputs.use_existing_sqs_trigger }}" \
+          --arg existing_sqs_queue_name_val "${{ inputs.existing_sqs_queue_name }}" \
+          '{
+            environments: ($environments_str | fromjson),
+            global_env_vars: ($global_env_vars_json_str | fromjson),
+            s3_bucket_name: $s3_bucket_name_val,
+            aws_region: $aws_region_val,
+            project_name: $project_name_val,
+            environment: $environment_val,
+            create_sqs_queue: ($create_sqs_queue_str | if . == "true" then true else false end),
+            use_existing_sqs_trigger: ($use_existing_sqs_trigger_str | if . == "true" then true else false end),
+            existing_sqs_queue_name: $existing_sqs_queue_name_val # MODIFICADO
+          }')
 
         echo "$json_content" > terraform/terraform.auto.tfvars.json
 
         echo "✅ terraform.auto.tfvars.json gerado com sucesso!"
       env: 
+        # Mantém as variáveis de ambiente necessárias para o jq (inputs referenciados como $ENV.VAR)
         AWS_REGION: ${{ inputs.AWS_REGION }}
         PROJECT_NAME: ${{ inputs.PROJECT_NAME }}
         ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
@@ -108,10 +114,9 @@ runs:
         AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
         S3_BUCKET_NAME: ${{ inputs.s3_bucket_name }}
-        CREATE_SQS_QUEUE: ${{ inputs.create_sqs_queue }} 
-        # NOVO: Passando as novas variáveis de trigger de SQS existente para o ambiente
+        CREATE_SQS_QUEUE: ${{ inputs.create_sqs_queue }}
         USE_EXISTING_SQS_TRIGGER: ${{ inputs.use_existing_sqs_trigger }}
-        EXISTING_SQS_QUEUE_ARN: ${{ inputs.existing_sqs_queue_arn }}
+        EXISTING_SQS_QUEUE_NAME: ${{ inputs.existing_sqs_queue_name }} # MODIFICADO
 
     # 🕵️‍♀️ Debug do arquivo gerado
     - name: Debug - Conteúdo de terraform.auto.tfvars.json (APÓS GERAÇÃO)

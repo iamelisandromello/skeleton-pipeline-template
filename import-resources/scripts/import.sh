@@ -7,23 +7,20 @@ set -e
 export TF_VAR_environment="$ENVIRONMENT"
 export TF_VAR_project_name="$PROJECT_NAME"
 export TF_VAR_s3_bucket_name="$S3_BUCKET_NAME"
-# Estas duas abaixo podem não ser sempre necessárias para o import, mas manter para consistência
-# Elas devem vir da Action (generate-tfvars) para o TF_VARS, não para a Action import-resources.
-# Comentando-as aqui para evitar confusão, pois não são inputs diretos do import-resources.
-# export TF_VAR_global_env_vars="${GLOBAL_ENV_VARS}" 
-# export TF_VAR_environments="${ENVIRONMENTS}"      
 
 # Variáveis de controle da SQS (passadas como inputs para a Action e depois exportadas para o Terraform)
 export TF_VAR_create_sqs_queue="$CREATE_SQS_QUEUE"
 export TF_VAR_use_existing_sqs_trigger="$USE_EXISTING_SQS_TRIGGER"
-export TF_VAR_existing_sqs_queue_arn="$EXISTING_SQS_QUEUE_ARN"
+# NOTA: EXISTING_SQS_QUEUE_NAME será exportado como TF_VAR. O ARN será resolvido pelo Terraform.
+# Para o import.sh, vamos resolver o ARN internamente para as chamadas AWS CLI.
+export TF_VAR_existing_sqs_queue_name="$EXISTING_SQS_QUEUE_NAME"
 
 echo "📦 TF_VARs disponíveis para o Terraform:"
 env | grep TF_VAR_ || echo "Nenhum TF_VAR encontrado."
 echo ""
 
 # Define caminho do diretório Terraform
-terraform_path="${TERRAFORM_PATH:-terraform/terraform}" # Ajustado default para 'terraform/terraform' para consistência
+terraform_path="${TERRAFORM_PATH:-terraform/terraform}"
 cd "$GITHUB_WORKSPACE/$terraform_path" || {
   echo "❌ Diretório $terraform_path não encontrado em $GITHUB_WORKSPACE"
   exit 1
@@ -40,25 +37,21 @@ terraform validate -no-color -json
 
 
 ### === NOMES DOS RECURSOS CONSTRUÍDOS COM BASE NO PADRÃO DE LOCALS === ###
-# Estes nomes devem refletir exatamente como são construídos em locals.tf do módulo raiz.
-# E devem ser consistentes com o nome da Lambda fornecido por LAMBDA_FUNCTION_NAME
 if [ "$ENVIRONMENT" = "prod" ]; then
-  # Usar diretamente o LAMBDA_FUNCTION_NAME que é passado como input para a action
-  # pois ele já conterá o nome exato da função (ex: my-lambda ou my-lambda-staging).
-  LAMBDA_NAME="${LAMBDA_FUNCTION_NAME}" 
+  LAMBDA_NAME="${LAMBDA_FUNCTION_NAME}" # Usar o nome exato da Lambda passado como input
   ROLE_NAME="${PROJECT_NAME}_execution_role"
   LOGGING_POLICY_NAME="${PROJECT_NAME}_logging_policy"
   PUBLISH_POLICY_NAME="${PROJECT_NAME}-lambda-sqs-publish"
   CONSUME_POLICY_NAME="${PROJECT_NAME}-lambda-sqs-consume"
 else
-  LAMBDA_NAME="${LAMBDA_FUNCTION_NAME}"
+  LAMBDA_NAME="${LAMBDA_FUNCTION_NAME}" # Usar o nome exato da Lambda passado como input
   ROLE_NAME="${PROJECT_NAME}-${ENVIRONMENT}_execution_role"
   LOGGING_POLICY_NAME="${PROJECT_NAME}-${ENVIRONMENT}_logging_policy"
   PUBLISH_POLICY_NAME="${PROJECT_NAME}-${ENVIRONMENT}-lambda-sqs-publish"
   CONSUME_POLICY_NAME="${PROJECT_NAME}-${ENVIRONMENT}-lambda-sqs-consume"
 fi
 
-QUEUE_NAME="${LAMBDA_NAME}-queue"
+QUEUE_NAME="${LAMBDA_NAME}-queue" # Este é o nome da SQS SE for criada por este TF
 LOG_GROUP_NAME="/aws/lambda/${LAMBDA_NAME}"
 
 # Para o Terraform plan, use -no-color para evitar caracteres de formatação no log.
@@ -71,9 +64,7 @@ set +e # Desabilita 'set -e' para que os comandos de verificação de existênci
 
 # ===== IMPORTS CONDICIONAIS ===== #
 
-# ✅ Importa SQS se existir E se a criação da SQS for habilitada (create_sqs_queue = true e use_existing_sqs_trigger = false)
-# A lógica de 'create_sqs_queue && !use_existing_sqs_trigger' é controlada no Terraform HCL
-# Aqui, apenas importamos se CREATE_SQS_QUEUE for TRUE. Se for FALSE, a SQS não deveria ser criada.
+# ✅ Importa SQS se existir E se a criação da SQS for habilitada
 if [ "$CREATE_SQS_QUEUE" = "true" ]; then 
   echo "🔍 Verificando existência da SQS '$QUEUE_NAME' (para criação de nova fila)..."
   QUEUE_URL=$(aws sqs get-queue-url --queue-name "$QUEUE_NAME" --region "$AWS_REGION" --query 'QueueUrl' --output text 2>/dev/null)
@@ -81,11 +72,10 @@ if [ "$CREATE_SQS_QUEUE" = "true" ]; then
   if [ $? -eq 0 ] && [ -n "$QUEUE_URL" ] && [ "$QUEUE_URL" != "None" ]; then
     echo "📥 URL da SQS encontrada: $QUEUE_URL"
     echo "🌐 Importando recurso no Terraform: module.sqs.aws_sqs_queue.queue"
-    # Adicionado 'jq -e' para garantir que grep só prossiga se encontrar o match
     if terraform state list -no-color | grep -q "module.sqs[0].aws_sqs_queue.queue"; then
       echo "ℹ️ SQS '$QUEUE_NAME' já está no state. Nenhuma ação necessária."
     else
-      set -x # Habilita 'set -x' para o comando import para debug
+      set -x
       terraform import "module.sqs[0].aws_sqs_queue.queue" "$QUEUE_URL" && \
         echo "✅ SQS '$QUEUE_NAME' importada com sucesso." || {
           echo "❌ Falha ao importar a SQS '$QUEUE_NAME'."
@@ -102,9 +92,31 @@ fi
 
 # NOVO: Importa aws_lambda_event_source_mapping se USE_EXISTING_SQS_TRIGGER for true
 if [ "$USE_EXISTING_SQS_TRIGGER" = "true" ]; then
+  # Primeiro, resolve o ARN da fila SQS existente a partir do nome
+  if [ -z "$EXISTING_SQS_QUEUE_NAME" ]; then
+    echo "❌ ERRO: EXISTING_SQS_QUEUE_NAME não fornecido, mas USE_EXISTING_SQS_TRIGGER é true."
+    exit 1
+  fi
+  
+  echo "🔍 Resolvendo ARN para a fila SQS existente: '$EXISTING_SQS_QUEUE_NAME' na região '$AWS_REGION'..."
+  EXISTING_SQS_QUEUE_URL=$(aws sqs get-queue-url --queue-name "$EXISTING_SQS_QUEUE_NAME" --region "$AWS_REGION" --query 'QueueUrl' --output text 2>/dev/null)
+  
+  if [ $? -ne 0 ] || [ -z "$EXISTING_SQS_QUEUE_URL" ] || [ "$EXISTING_SQS_QUEUE_URL" = "None" ]; then
+    echo "❌ ERRO: Não foi possível obter a URL para a fila SQS existente '$EXISTING_SQS_QUEUE_NAME'. Verifique o nome e a região."
+    exit 1
+  fi
+
+  EXISTING_SQS_QUEUE_ARN=$(aws sqs get-queue-attributes --queue-url "$EXISTING_SQS_QUEUE_URL" --attribute-names QueueArn --region "$AWS_REGION" --query 'Attributes.QueueArn' --output text 2>/dev/null)
+
+  if [ $? -ne 0 ] || [ -z "$EXISTING_SQS_QUEUE_ARN" ] || [ "$EXISTING_SQS_QUEUE_ARN" = "None" ]; then
+    echo "❌ ERRO: Não foi possível obter o ARN para a fila SQS existente '$EXISTING_SQS_QUEUE_NAME'. Verifique as permissões ou o nome da fila."
+    exit 1
+  fi
+
+  echo "📥 ARN resolvido para '$EXISTING_SQS_QUEUE_NAME': $EXISTING_SQS_QUEUE_ARN"
+
   echo "🔍 Verificando existência da Lambda Event Source Mapping para ARN '$EXISTING_SQS_QUEUE_ARN' e função '$LAMBDA_NAME'..."
 
-  # Buscar o UUID do event source mapping existente
   MAPPING_UUID=$(aws lambda list-event-source-mappings \
     --event-source-arn "$EXISTING_SQS_QUEUE_ARN" \
     --function-name "$LAMBDA_NAME" \
@@ -118,7 +130,7 @@ if [ "$USE_EXISTING_SQS_TRIGGER" = "true" ]; then
     if terraform state list -no-color | grep -q "aws_lambda_event_source_mapping.sqs_event_source_mapping[0]"; then
       echo "ℹ️ Lambda Event Source Mapping já está no state. Nenhuma ação necessária."
     else
-      set -x # Habilita 'set -x' para o comando import para debug
+      set -x
       terraform import "aws_lambda_event_source_mapping.sqs_event_source_mapping[0]" "$MAPPING_UUID" && \
         echo "✅ Lambda Event Source Mapping importada com sucesso." || {
           echo "❌ Falha ao importar a Lambda Event Source Mapping."
