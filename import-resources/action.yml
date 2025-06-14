@@ -31,22 +31,23 @@ inputs:
     required: false
     default: "true"
 
-  # NOVOS INPUTS: Para SQS Existente e Lambda Function Name
+  # MODIFICADO: Input agora é o NOME da fila SQS existente
   use_existing_sqs_trigger:
     description: "Define se uma fila SQS existente será usada como trigger para a Lambda e se deve ser importada."
     required: false
-    type: string # Receberá "true" ou "false" como string
+    type: string
     default: "false"
 
-  existing_sqs_queue_arn:
-    description: "O ARN da fila SQS existente a ser usada como trigger (requer use_existing_sqs_trigger=true)."
+  # MODIFICADO: Input agora é o NOME da fila SQS existente, não o ARN
+  existing_sqs_queue_name:
+    description: "O NOME da fila SQS existente a ser usada como trigger (requer use_existing_sqs_trigger=true)."
     required: false
     type: string
     default: "" # Valor padrão vazio
 
   lambda_function_name:
     description: "Nome da função Lambda para a qual a trigger SQS será associada (necessário para importação da trigger)."
-    required: true # Essencial para identificar a trigger existente
+    required: true
     type: string
 
 runs:
@@ -69,17 +70,15 @@ runs:
 
         set +e
       env:
-        # TODAS as variáveis de ambiente mapeadas a partir dos inputs.
-        # Nenhuma variável global do job da pipeline deve ser referenciada diretamente aqui.
         AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
         AWS_REGION: ${{ inputs.aws_region }}
         PROJECT_NAME: ${{ inputs.project_name }}
         ENVIRONMENT: ${{ inputs.environment }}
-        TERRAFORM_PATH: ${{ inputs.terraform_path }} # Passar terraform_path para o script
+        TERRAFORM_PATH: ${{ inputs.terraform_path }}
 
-        # Variáveis de controle da SQS e trigger (incluídas corretamente agora)
+        # Variáveis de controle da SQS e trigger (agora usando NOME)
         CREATE_SQS_QUEUE: ${{ inputs.create_sqs_queue }} 
         USE_EXISTING_SQS_TRIGGER: ${{ inputs.use_existing_sqs_trigger }}
-        EXISTING_SQS_QUEUE_ARN: ${{ inputs.existing_sqs_queue_arn }}
-        LAMBDA_FUNCTION_NAME: ${{ inputs.lambda_function_name }} # Novo input para o nome da Lambda
+        EXISTING_SQS_QUEUE_NAME: ${{ inputs.existing_sqs_queue_name }} # MODIFICADO
+        LAMBDA_FUNCTION_NAME: ${{ inputs.lambda_function_name }}

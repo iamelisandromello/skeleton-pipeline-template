@@ -32,7 +32,7 @@ inputs:
     required: false
     default: "terraform"
 
-  # NOVOS INPUTS: Para SQS Existente
+  # NOVOS INPUTS: Para SQS
   create_sqs_queue:
     description: "Define se uma NOVA fila SQS deve ser criada (true/false)."
     required: false
@@ -45,8 +45,9 @@ inputs:
     type: string
     default: "false"
 
-  existing_sqs_queue_arn:
-    description: "O ARN da fila SQS existente a ser usada como trigger."
+  # MODIFICADO: Input agora é o NOME da fila SQS existente, não o ARN
+  existing_sqs_queue_name:
+    description = "O NOME da fila SQS existente a ser usada como trigger."
     required: false
     type: string
     default: ""
@@ -82,15 +83,14 @@ runs:
         TF_VAR_s3_bucket_name: ${{ inputs.S3_BUCKET_NAME }}
         TF_VAR_global_env_vars: ${{ inputs.GLOBAL_ENV_VARS_JSON }}
         TF_VAR_environments: ${{ inputs.ENVIRONMENTS_JSON }}
-        TF_VAR_create_sqs_queue: ${{ inputs.create_sqs_queue }} # Passa a variável
-        TF_VAR_use_existing_sqs_trigger: ${{ inputs.use_existing_sqs_trigger }} # Passa a variável
-        TF_VAR_existing_sqs_queue_arn: ${{ inputs.existing_sqs_queue_arn }} # Passa a variável
-        AWS_ACCESS_KEY_ID: ${{ inputs.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.AWS_SECRET_ACCESS_KEY }}
+        TF_VAR_create_sqs_queue: ${{ inputs.create_sqs_queue }}
+        TF_VAR_use_existing_sqs_trigger: ${{ inputs.use_existing_sqs_trigger }}
+        TF_VAR_existing_sqs_queue_name: ${{ inputs.existing_sqs_queue_name }} # MODIFICADO
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
       run: |
         cd "${{ inputs.terraform_path }}"
         echo "📦 Executando Terraform Plan..."
-        # Passa 'environment' via -var diretamente, pois já é um input da action
         terraform plan -input=false -var "environment=${{ inputs.ENVIRONMENT }}"
 
     # 🚀 Aplica o plano se auto_approve for true
@@ -101,13 +101,12 @@ runs:
         TF_VAR_s3_bucket_name: ${{ inputs.S3_BUCKET_NAME }}
         TF_VAR_global_env_vars: ${{ inputs.GLOBAL_ENV_VARS_JSON }}
         TF_VAR_environments: ${{ inputs.ENVIRONMENTS_JSON }}
-        TF_VAR_create_sqs_queue: ${{ inputs.create_sqs_queue }} # Passa a variável
-        TF_VAR_use_existing_sqs_trigger: ${{ inputs.use_existing_sqs_trigger }} # Passa a variável
-        TF_VAR_existing_sqs_queue_arn: ${{ inputs.existing_sqs_queue_arn }} # Passa a variável
+        TF_VAR_create_sqs_queue: ${{ inputs.create_sqs_queue }}
+        TF_VAR_use_existing_sqs_trigger: ${{ inputs.use_existing_sqs_trigger }}
+        TF_VAR_existing_sqs_queue_name: ${{ inputs.existing_sqs_queue_name }} # MODIFICADO
         AWS_ACCESS_KEY_ID: ${{ inputs.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.AWS_SECRET_ACCESS_KEY }}
       run: |
         cd "${{ inputs.terraform_path }}"
         echo "🚀 Executando Terraform Apply..."
-        # Passa 'environment' via -var diretamente, pois já é um input da action
         terraform apply -auto-approve -var "environment=${{ inputs.ENVIRONMENT }}"
