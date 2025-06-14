@@ -31,21 +31,19 @@ inputs:
     required: false
     default: "true"
 
-  # NOVO INPUT: Para controlar se usaremos uma fila SQS EXISTENTE como trigger
+  # NOVOS INPUTS: Para SQS Existente e Lambda Function Name
   use_existing_sqs_trigger:
     description: "Define se uma fila SQS existente será usada como trigger para a Lambda e se deve ser importada."
     required: false
     type: string # Receberá "true" ou "false" como string
     default: "false"
 
-  # NOVO INPUT: ARN da fila SQS EXISTENTE
   existing_sqs_queue_arn:
     description: "O ARN da fila SQS existente a ser usada como trigger (requer use_existing_sqs_trigger=true)."
     required: false
     type: string
     default: "" # Valor padrão vazio
 
-  # NOVO INPUT: Nome da função Lambda
   lambda_function_name:
     description: "Nome da função Lambda para a qual a trigger SQS será associada (necessário para importação da trigger)."
     required: true # Essencial para identificar a trigger existente
@@ -71,7 +69,8 @@ runs:
 
         set +e
       env:
-        # Variáveis de ambiente existentes (garantir que não foram removidas)
+        # TODAS as variáveis de ambiente mapeadas a partir dos inputs.
+        # Nenhuma variável global do job da pipeline deve ser referenciada diretamente aqui.
         AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
         AWS_REGION: ${{ inputs.aws_region }}
@@ -79,7 +78,7 @@ runs:
         ENVIRONMENT: ${{ inputs.environment }}
         TERRAFORM_PATH: ${{ inputs.terraform_path }} # Passar terraform_path para o script
 
-        # Variáveis adicionadas para a funcionalidade SQS (incluídas corretamente agora)
+        # Variáveis de controle da SQS e trigger (incluídas corretamente agora)
         CREATE_SQS_QUEUE: ${{ inputs.create_sqs_queue }} 
         USE_EXISTING_SQS_TRIGGER: ${{ inputs.use_existing_sqs_trigger }}
         EXISTING_SQS_QUEUE_ARN: ${{ inputs.existing_sqs_queue_arn }}
