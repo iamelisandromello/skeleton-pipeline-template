@@ -21,26 +21,21 @@ inputs:
     required: true
   s3_bucket_name:
     required: true
-  # INPUT EXISTENTE: Para controlar a criação da SQS
   create_sqs_queue:
     description: "Define se a fila SQS deve ser criada (true/false)."
     required: true
     type: string
     default: "true"
-
-  # MODIFICADO: Input agora é o NOME da fila SQS existente
   use_existing_sqs_trigger:
     description: "Define se uma fila SQS existente será usada como trigger para a Lambda."
     required: true
     type: string
     default: "false"
-
-  # MODIFICADO: Input agora é o NOME da fila SQS existente, não o ARN
   existing_sqs_queue_name:
     description: "O NOME da fila SQS existente a ser usada como trigger (requer use_existing_sqs_trigger=true)."
-    required: false # Requerido apenas se use_existing_sqs_trigger for true
+    required: false
     type: string
-    default: "" # Valor padrão vazio
+    default: ""
 
 runs:
   using: "composite"
@@ -58,74 +53,31 @@ runs:
         echo "existing_sqs_queue_name=${{ inputs.existing_sqs_queue_name }}"
         echo "---"
 
-    # 🧾 Gerando arquivo de variáveis terraform
+    # 🧾 Chama o script Bash externo para gerar o arquivo terraform.auto.tfvars.json
     - name: Gerar arquivo terraform.auto.tfvars.json
       shell: bash
       run: |
-        set -e
-        echo "Gerando terraform.auto.tfvars.json..."
-
-        # Instala jq se não estiver presente (geralmente já está em runners ubuntu-latest)
-        if ! command -v jq &> /dev/null
-        then
-            echo "jq não encontrado. Instalando..."
-            sudo apt-get update && sudo apt-get install -y jq
+        # Verifica se o script existe
+        if [ ! -f "${{ github.action_path }}/scripts/generate_tfvars.sh" ]; then
+          echo "❌ Script generate_tfvars.sh não encontrado em ${{ github.action_path }}/scripts/"
+          exit 1
         fi
+        # Executa o script passando todos os inputs como variáveis de ambiente
+        # O script usará estas variáveis para construir o JSON.
+        bash "${{ github.action_path }}/scripts/generate_tfvars.sh"
+      env: # Passa todos os inputs da Action como variáveis de ambiente para o script Bash
+        AWS_REGION: ${{ inputs.AWS_REGION }}
+        PROJECT_NAME: ${{ inputs.PROJECT_NAME }}
+        ENVIRONMENT: ${{ inputs.ENVIRONMENT }}
+        GLOBAL_ENV_VARS_JSON: ${{ inputs.GLOBAL_ENV_VARS_JSON }}
+        ENVIRONMENTS: ${{ inputs.ENVIRONMENTS }}
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws_access_key_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws_secret_access_key }}
+        S3_BUCKET_NAME: ${{ inputs.s3_bucket_name }}
+        CREATE_SQS_QUEUE: ${{ inputs.create_sqs_queue }}
+        USE_EXISTING_SQS_TRIGGER: ${{ inputs.use_existing_sqs_trigger }}
+        EXISTING_SQS_QUEUE_NAME: ${{ inputs.existing_sqs_queue_name }}
 
-        # Debug jq version para fins de diagnóstico futuro
-        echo "jq version: $(jq --version)"
-
-        # Garante que o diretório 'terraform' exista antes de tentar escrever o arquivo
-        mkdir -p terraform/
-
-        # Para ENVIRONMENTS e GLOBAL_ENV_VARS_JSON:
-        # É crucial que estes inputs, que são strings JSON multi-linha (secrets),
-        # sejam passados para 'jq' de uma forma que preserve sua estrutura exata.
-        # Atribuir diretamente a uma variável de ambiente (e.g., MY_VAR: ${{ inputs.COMPLEX_JSON }})
-        # pode corromper o JSON devido a como o shell lida com quebras de linha ou caracteres especiais,
-        # resultando no erro "Invalid numeric literal".
-        # A solução mais robusta é escrevê-los para arquivos temporários e usar 'jq --argfile'.
-
-        echo "${{ inputs.ENVIRONMENTS }}" > environments_input_temp.json
-        echo "${{ inputs.GLOBAL_ENV_VARS_JSON }}" > global_env_vars_input_temp.json
-        
-        # Debug dos arquivos temporários para verificar o conteúdo
-        echo "--- Debug environments_input_temp.json ---"
-        cat environments_input_temp.json
-        echo "--- Debug global_env_vars_input_temp.json ---"
-        cat global_env_vars_input_temp.json
-        echo "---"
-
-        # O jq agora usará as variáveis simples do 'env' do passo e os arquivos temporários para os JSONs complexos.
-        json_content=$(jq -n \
-          --argfile environments_val environments_input_temp.json \
-          --argfile global_env_vars_val global_env_vars_input_temp.json \
-          --arg s3_bucket_name_val "$S3_BUCKET_NAME" \
-          --arg aws_region_val "$AWS_REGION" \
-          --arg project_name_val "$PROJECT_NAME" \
-          --arg environment_val "$ENVIRONMENT" \
-          --arg create_sqs_queue_str "$CREATE_SQS_QUEUE" \
-          --arg use_existing_sqs_trigger_str "$USE_EXISTING_SQS_TRIGGER" \
-          --arg existing_sqs_queue_name_val "$EXISTING_SQS_QUEUE_NAME" \
-          '{
-            environments: $environments_val,
-            global_env_vars: $global_env_vars_val,
-            s3_bucket_name: $s3_bucket_name_val,
-            aws_region: $aws_region_val,
-            project_name: $project_name_val,
-            environment: $environment_val,
-            create_sqs_queue: ($create_sqs_queue_str | if . == "true" then true else false end),
-            use_existing_sqs_trigger: ($use_existing_sqs_trigger_str | if . == "true" then true else false end),
-            existing_sqs_queue_name: $existing_sqs_queue_name_val
-          }')
-
-        echo "$json_content" > terraform/terraform.auto.tfvars.json
-
-        # Limpa os arquivos temporários após o uso
-        rm environments_input_temp.json global_env_vars_input_temp.json
-
-        echo "✅ terraform.auto.tfvars.json gerado com sucesso!"
-    
     # 🕵️‍♀️ Debug do arquivo gerado
     - name: Debug - Conteúdo de terraform.auto.tfvars.json (APÓS GERAÇÃO)
       shell: bash
